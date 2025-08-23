@@ -1,0 +1,65 @@
+# =================================================================
+# General
+# =================================================================
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# IDE settings folders
+.vscode/
+.idea/
+
+# =================================================================
+# MATLAB & Simulink
+# =================================================================
+# MATLAB temporary and backup files
+*.asv
+*.bak
+*.autosave
+*~
+
+# MATLAB crash dump files
+matlab_crash_dump.*
+
+# Compiled MEX files
+*.mex*
+
+# P-coded files (pre-parsed, obscured source)
+*.p
+
+# Simulink code generation and cache folders
+slprj/
+slxc/
+
+# MATLAB Profile reports
+profile*.html
+
+# =================================================================
+# Project-Specific Exclusions
+# =================================================================
+# Ignore the entire directory for pipeline outputs.
+# This is the most important rule for this project.
+/pipeline_output/
+
+# Ignore large data file formats by default to prevent accidents
+# These should live externally in your OneDrive data structure.
+*.dat
+*.ns5
+*.nev
+*.mat
+*.npy
+
+# Allow specific configuration .mat files if we ever decide to use them
+# (Example, currently not used in our plan)
+!/config/experiment_codes.mat
+
+# Ignore generated figures and plots
+*.fig
+*.png
+*.jpg
+*.jpeg
+*.eps
+*.pdf
+
+# Ignore log files
+*.log
