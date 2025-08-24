@@ -1,4 +1,4 @@
-function success = run_preparation(jobInfo, projectRootPath)
+function success = run_preparation(jobInfo, rawDataDir, analysisDir)
 % RUN_PREPARATION - Converts raw neural data to a Kilosort-ready .dat file.
 %
 % This function takes a job's information, loads the corresponding raw .ns5 data,
@@ -8,7 +8,8 @@ function success = run_preparation(jobInfo, projectRootPath)
 % Inputs:
 %   jobInfo (table row or struct) - A single row from the manifest table,
 %                                   containing metadata for one unique_id.
-%   projectRootPath (string)      - The absolute path to the project's root directory.
+%   rawDataDir (string)           - The absolute path to the directory containing the raw .ns5 files.
+%   analysisDir (string)          - The absolute path to the directory where Kilosort output will be stored.
 %
 % Outputs:
 %   success (logical) - true if the .dat file was created successfully, false otherwise.
@@ -16,8 +17,8 @@ function success = run_preparation(jobInfo, projectRootPath)
 
 try
     % 1. Construct Paths
-    rawFilePath = fullfile(projectRootPath, 'RawData', [jobInfo.raw_filename_base, '.ns5']);
-    kilosortOutputDir = fullfile(projectRootPath, 'Neuronal Data Analysis', jobInfo.unique_id);
+    kilosortOutputDir = fullfile(analysisDir, jobInfo.unique_id);
+    rawFilePath = fullfile(rawDataDir, [jobInfo.raw_filename_base, '.ns5']);
     datFilePath = fullfile(kilosortOutputDir, [jobInfo.unique_id, '.dat']);
 
     % 2. Create Directory
