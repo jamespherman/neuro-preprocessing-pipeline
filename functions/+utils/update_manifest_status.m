@@ -23,7 +23,11 @@ function update_manifest_status(manifestPath, unique_id, newStatus)
         % Read the entire CSV file into a table, treating all text-based
         % columns as strings. This is consistent with parse_manifest and
         % helps prevent data-type-related errors on read.
-        opts = detectImportOptions(manifestPath, 'TextType', 'string');
+        opts = detectImportOptions(manifestPath);
+        % Set all variable types to 'string' to avoid MATLAB's type detection
+        % from causing issues. This provides consistency across different
+        % environments and MATLAB versions.
+        opts.VariableTypes = repmat({'string'}, 1, length(opts.VariableNames));
         manifestTable = readtable(manifestPath, opts);
     catch ME
         % If readtable fails, throw an error with details.
