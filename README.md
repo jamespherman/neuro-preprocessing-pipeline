@@ -54,6 +54,16 @@ This pipeline is controlled by the `config/sessions_manifest.csv` file. Each row
 
 ---
 
+## Directory Structure
+
+-   `/config`: Contains the `sessions_manifest.csv`.
+-   `/docs`: Contains supporting documentation, including data dictionaries for the behavioral tasks that describe the structure of the raw PLDAPS `.mat` files.
+-   `/functions`: All MATLAB functions, organized into packages (`+utils`, `+prep`, `+consolidate`).
+-   `/scripts`: Contains the main entry point for the pipeline, `run_preprocessing.m`.
+-   `/pipeline_output`: **(Ignored by Git)** This is the default location for all generated data.
+
+---
+
 ## Usage
 
 1.  **Add a Job:** Add one or more new rows to `config/sessions_manifest.csv`, setting the `status` to `raw`.
