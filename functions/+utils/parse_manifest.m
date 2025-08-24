@@ -20,7 +20,7 @@ function sessionTable = parse_manifest(manifestPath)
     % Use a try-catch block for robust file reading
     try
         % Read the CSV file into a table
-        sessionTable = readtable(manifestPath, 'FileType', 'text', 'Delimiter', ',');
+        sessionTable = readtable(manifestPath, 'FileType', 'text', 'Delimiter', ',', 'TextType', 'string');
     catch ME
         % If readtable fails, throw a more informative error
         error('parse_manifest:ReadError', 'Failed to read the manifest file. Please ensure it is a valid CSV file.\nDetails: %s', ME.message);

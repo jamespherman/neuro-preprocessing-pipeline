@@ -28,5 +28,5 @@ function project_root = find_project_root()
     end
 
     % If the loop completes without finding .git, throw an error
-    error('Project root with .git directory not found.'
+    error('Project root with .git directory not found.');
 end

@@ -28,10 +28,10 @@ disp('Added project functions to the MATLAB path.');
 % --- End of Setup Paths ---
 
 % Find the project root directory
-project_root = utils.find_project_root();
+project_root = utils.find_project_root;
 
 % Construct the path to the sessions manifest file
-manifest_path = fullfile(project_root, 'config', 'sessions_manifest.csv');
+manifest_path = fullfile(project_root, 'config', 'session_manifest.csv');
 
 % Parse the manifest to get the list of jobs
 jobs = utils.parse_manifest(manifest_path);
@@ -42,7 +42,8 @@ for i = 1:height(jobs)
     job = jobs(i, :);
 
     % Display the unique_id and status of the job
-    fprintf('Processing job: %s, Status: %s\n', job.unique_id, job.status);
+    fprintf('Processing job: %s, Status: %s\n', job.unique_id, ...
+        job.status);
 end
 
 end
