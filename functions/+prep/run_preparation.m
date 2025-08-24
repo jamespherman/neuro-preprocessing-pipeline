@@ -16,7 +16,8 @@ function success = run_preparation(jobInfo, projectRootPath)
 
 try
     % 1. Construct Paths
-    rawFilePath = fullfile(projectRootPath, 'RawData', [jobInfo.raw_filename_base, '.ns5']);
+    % Use char() to ensure raw_filename_base is a character vector for concatenation.
+    rawFilePath = fullfile(projectRootPath, 'RawData', [char(jobInfo.raw_filename_base), '.ns5']);
     kilosortOutputDir = fullfile(projectRootPath, 'Neuronal Data Analysis', jobInfo.unique_id);
     datFilePath = fullfile(kilosortOutputDir, [jobInfo.unique_id, '.dat']);
 
@@ -32,8 +33,9 @@ try
     nsxData = utils.openNSx('read', rawFilePath);
 
     % 4. Slice Channels
-    % The 'channel_numbers' field is a string like '1:32' or '33:64'
-    channelIndices = eval(jobInfo.channel_numbers);
+    % The 'channel_numbers' field is a string like '1:32' or '33:64'.
+    % Using str2num is safer than eval.
+    channelIndices = str2num(jobInfo.channel_numbers);
 
     % The data from openNSx is in a cell array, with one cell per electrode bank.
     % We assume the data we need is in the first cell nsxData.Data{1}
@@ -41,8 +43,10 @@ try
     slicedData = nsxData.Data{1}(channelIndices, :);
 
     % 4a. Reorder Channels based on Probe Type for Kilosort
-    if isfield(jobInfo, 'probe_type') && ischar(jobInfo.probe_type) && ~isempty(jobInfo.probe_type)
-        switch jobInfo.probe_type
+    % Use ismember with VariableNames for tables, and handle both char and string types.
+    hasProbeType = ismember('probe_type', jobInfo.Properties.VariableNames);
+    if hasProbeType && (ischar(jobInfo.probe_type) || isstring(jobInfo.probe_type)) && ~isempty(jobInfo.probe_type)
+        switch char(jobInfo.probe_type) % Convert to char for switch
             case 'nnVector'
                 % NeuroNexus Vector Probe (32-channel)
                 reorder_idx = [17:2:31 18:2:32 2:2:16 1:2:15];
@@ -54,7 +58,7 @@ try
             otherwise
                 warning('prep:run_preparation:unknownProbeType', ...
                         'Probe type ''%s'' is not recognized. Channels will not be reordered.', ...
-                        jobInfo.probe_type);
+                        char(jobInfo.probe_type));
         end
     else
         warning('prep:run_preparation:noProbeType', ...
@@ -65,7 +69,7 @@ try
     % Open file for writing in binary mode
     fid = fopen(datFilePath, 'w');
     if fid == -1
-        error('Could not open file for writing: %s', datFilePath);
+        error('Could not open file for writing: %s', char(datFilePath));
     end
 
     % Write the data, transposing it to be samples x channels, and casting to int16
@@ -79,7 +83,7 @@ try
 
 catch ME
     % If any error occurs, display it and return false
-    fprintf('Error in prep.run_preparation for unique_id %s:\n', jobInfo.unique_id);
+    fprintf('Error in prep.run_preparation for unique_id %s:\n', char(jobInfo.unique_id));
     fprintf('%s\n', ME.message);
     success = false;
 end
