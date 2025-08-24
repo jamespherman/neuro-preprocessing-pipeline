@@ -16,8 +16,8 @@ function success = run_preparation(jobInfo, projectRootPath)
 
 try
     % 1. Construct Paths
-    rawFilePath = fullfile(projectRootPath, jobInfo.raw_filename_base);
-    kilosortOutputDir = fullfile(projectRootPath, jobInfo.kilosort_output_dir);
+    rawFilePath = fullfile(projectRootPath, 'RawData', [jobInfo.raw_filename_base, '.ns5']);
+    kilosortOutputDir = fullfile(projectRootPath, 'Neuronal Data Analysis', jobInfo.unique_id);
     datFilePath = fullfile(kilosortOutputDir, [jobInfo.unique_id, '.dat']);
 
     % 2. Create Directory
