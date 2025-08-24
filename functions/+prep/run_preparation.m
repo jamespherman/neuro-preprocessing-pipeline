@@ -40,6 +40,27 @@ try
     % The data matrix is channels x samples.
     slicedData = nsxData.Data{1}(channelIndices, :);
 
+    % 4a. Reorder Channels based on Probe Type for Kilosort
+    if isfield(jobInfo, 'probe_type') && ischar(jobInfo.probe_type) && ~isempty(jobInfo.probe_type)
+        switch jobInfo.probe_type
+            case 'nnVector'
+                % NeuroNexus Vector Probe (32-channel)
+                reorder_idx = [17:2:31 18:2:32 2:2:16 1:2:15];
+                slicedData = slicedData(reorder_idx, :);
+            case 'vProbe'
+                % V-Probe (32-channel)
+                reorder_idx = [32:-2:2, 31:-2:1];
+                slicedData = slicedData(reorder_idx, :);
+            otherwise
+                warning('prep:run_preparation:unknownProbeType', ...
+                        'Probe type ''%s'' is not recognized. Channels will not be reordered.', ...
+                        jobInfo.probe_type);
+        end
+    else
+        warning('prep:run_preparation:noProbeType', ...
+                'Probe type not specified in manifest. Channels will not be reordered.');
+    end
+
     % 5. Write .dat File
     % Open file for writing in binary mode
     fid = fopen(datFilePath, 'w');
