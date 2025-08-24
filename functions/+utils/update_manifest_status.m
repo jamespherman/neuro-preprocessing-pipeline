@@ -20,11 +20,10 @@ function update_manifest_status(manifestPath, unique_id, newStatus)
     % --- 1. Load the Manifest File ---
     % Use a try-catch block for robust file reading.
     try
-        % Read the entire CSV file into a table, treating text as strings.
-        % This is consistent with parse_manifest.
-        opts = detectImportOptions(manifestPath);
-        % Ensure all text-based columns are read as string
-        opts.TextType = "string";
+        % Read the entire CSV file into a table, treating all text-based
+        % columns as strings. This is consistent with parse_manifest and
+        % helps prevent data-type-related errors on read.
+        opts = detectImportOptions(manifestPath, 'TextType', 'string');
         manifestTable = readtable(manifestPath, opts);
     catch ME
         % If readtable fails, throw an error with details.
