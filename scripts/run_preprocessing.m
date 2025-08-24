@@ -30,6 +30,9 @@ disp('Added project functions to the MATLAB path.');
 % Find the project root directory
 project_root = utils.find_project_root;
 
+% Load the pipeline configuration
+config = pipeline_config();
+
 % Construct the path to the sessions manifest file
 manifest_path = fullfile(project_root, 'config', 'session_manifest.csv');
 
@@ -47,7 +50,7 @@ for i = 1:height(jobs)
             fprintf('Processing job: %s\n', char(job.unique_id));
 
             % Run the preparation step
-            success = prep.run_preparation(job, project_root);
+            success = prep.run_preparation(job, config.rawNeuralDataDir, config.analysisOutputDir);
 
             % If preparation was successful, update the status to 'prepared'
             if success
