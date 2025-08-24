@@ -43,7 +43,7 @@ for i = 1:height(jobs)
 
     try
         % Check if the job status is 'raw'
-        if strcmp(job.status, 'raw')
+        if strcmp(char(job.status), 'raw')
             fprintf('Processing job: %s\n', job.unique_id);
 
             % Run the preparation step
