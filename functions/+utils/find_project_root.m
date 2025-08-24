@@ -1,50 +1,32 @@
-function rootPath = find_project_root()
-    % FIND_PROJECT_ROOT Searches for the project's root directory.
-    %   This function traverses up the directory tree from the currently executing
-    %   script's path to find a directory named 'OneDrive - University of Pittsburgh'.
+function project_root = find_project_root()
+    % find_project_root - Finds the project's root directory.
     %
-    %   Outputs:
-    %       rootPath (string): The absolute path to the project root directory.
-    %
-    %   Throws:
-    %       error: If the project root directory is not found.
+    % The project root is identified by the presence of the '.git' directory.
+    % This function starts its search from the directory where this script is located
+    % and moves up the directory tree until it finds the '.git' directory.
 
-    % Define the name of the directory to search for.
-    targetDirName = 'OneDrive - University of Pittsburgh';
+    % Start from the directory of the currently executing file
+    current_dir = fileparts(mfilename('fullpath'));
 
-    % Get the full path of the currently running file.
-    % This ensures the search starts from the location of the script that calls this function.
-    currentFilePath = mfilename('fullpath');
-
-    % Start searching from the directory containing this file.
-    currentDir = fileparts(currentFilePath);
-
-    % Loop until the root of the filesystem is reached.
-    while true
-        % Construct the potential path to the target directory
-        potentialPath = fullfile(currentDir, targetDirName);
-
-        % Check if a directory with the target name exists at the current level.
-        if isfolder(potentialPath)
-            % If found, we have our root path.
-            rootPath = potentialPath;
+    % Loop until the root of the filesystem is reached
+    while ~isempty(current_dir)
+        % Check if the .git directory exists in the current directory
+        if isfolder(fullfile(current_dir, '.git'))
+            project_root = current_dir;
             return;
         end
 
-        % Move up to the parent directory for the next iteration.
-        parentDir = fileparts(currentDir);
+        % Move up one level
+        parent_dir = fileparts(current_dir);
 
-        % If the parent directory is the same as the current directory, we have
-        % reached the root of the filesystem (e.g., 'C:\' or '/').
-        if strcmp(currentDir, parentDir)
-            break; % Exit the loop if we've reached the top.
+        % If parent_dir is the same as current_dir, we've reached the root
+        if strcmp(parent_dir, current_dir)
+            break;
         end
 
-        currentDir = parentDir;
+        current_dir = parent_dir;
     end
 
-    % If the loop completes without finding the directory, it means the target
-    % was not found in any parent path. Throw an informative error.
-    error('Could not find the project root directory: ''%s''', targetDirName);
-
+    % If the loop completes without finding .git, throw an error
+    error('Project root with .git directory not found.'
 end
