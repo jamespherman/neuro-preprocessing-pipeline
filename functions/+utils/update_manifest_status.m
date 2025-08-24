@@ -18,13 +18,13 @@ function update_manifest_status(manifestPath, unique_id, newStatus)
 %- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
     % --- 1. Load the Manifest File ---
-    % Use a try-catch block for robust file reading, similar to parse_manifest.
+    % Use a try-catch block for robust file reading.
     try
-        % Read the entire CSV file into a table.
-        % 'PreserveVariableNames' is true by default, which is what we want.
-        % 'TextType' is specified as 'char' to ensure IDs are read as strings.
+        % Read the entire CSV file into a table, treating text as strings.
+        % This is consistent with parse_manifest.
         opts = detectImportOptions(manifestPath);
-        opts = setvartype(opts, 'char'); % Treat all variables as char to begin with
+        % Ensure all text-based columns are read as string
+        opts.TextType = "string";
         manifestTable = readtable(manifestPath, opts);
     catch ME
         % If readtable fails, throw an error with details.
@@ -34,25 +34,25 @@ function update_manifest_status(manifestPath, unique_id, newStatus)
 
     % --- 2. Find the Row by Unique ID ---
     % Find the row index matching the unique_id.
-    % Using strcmp for robust string comparison.
-    rowIndex = find(strcmp(manifestTable.unique_id, unique_id));
+    % Direct comparison `==` is used for string arrays.
+    rowIndex = find(manifestTable.unique_id == unique_id);
 
     % --- 3. Update the Status ---
     if isempty(rowIndex)
         % If unique_id is not found, display a warning and do not proceed.
         warning('update_manifest_status:IDNotFound', ...
-                'The unique_id "%s" was not found in the manifest. No update will be performed.', unique_id);
+                'The unique_id "%s" was not found in the manifest. No update will be performed.', char(unique_id));
         return; % Exit the function
 
     elseif numel(rowIndex) > 1
         % If multiple rows have the same unique_id, this is a critical data integrity issue.
         warning('update_manifest_status:DuplicateID', ...
-                'Found multiple rows with the unique_id "%s". Updating all found entries.', unique_id);
+                'Found multiple rows with the unique_id "%s". Updating all found entries.', char(unique_id));
     end
 
     % Update the 'status' column for the found row(s).
-    % We convert the newStatus to a cell so it can be assigned to the table.
-    manifestTable.status(rowIndex) = {newStatus};
+    % newStatus is a string or char, which can be directly assigned.
+    manifestTable.status(rowIndex) = string(newStatus);
 
     % --- 4. Write the Updated Table Back to File ---
     % Write the entire modified table back to the original file path.
