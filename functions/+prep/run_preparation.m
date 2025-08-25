@@ -19,8 +19,8 @@ try
     % 1. Construct Paths
 
     kilosortOutputDir = fullfile(kilosortParentDir, jobInfo.unique_id);
-    rawFilePath = fullfile(rawDataDir, [jobInfo.raw_filename_base, '.ns5']);
-    datFilePath = fullfile(kilosortOutputDir, [jobInfo.unique_id, '.dat']);
+    rawFilePath = fullfile(rawDataDir, jobInfo.raw_filename_base + ".ns5");
+    datFilePath = fullfile(kilosortOutputDir, jobInfo.unique_id + ".dat");
 
     % 2. Create Directory
     if ~exist(kilosortOutputDir, 'dir')
