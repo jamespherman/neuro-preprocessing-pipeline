@@ -20,10 +20,12 @@ clear; clc; close all;
 [script_path, ~, ~] = fileparts(mfilename('fullpath'));
 repo_root = fileparts(script_path);
 functions_path = fullfile(repo_root, 'functions');
+config_path = fullfile(repo_root, 'config');
 
 addpath(functions_path);
+addpath(config_path);
 
-disp('Added project functions to the MATLAB path.');
+disp('Added project functions & config directory to the MATLAB path.');
 
 % --- End of Setup Paths ---
 
