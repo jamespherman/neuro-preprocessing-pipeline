@@ -31,7 +31,7 @@ try
     % We will load the entire file, then select channels.
     % The 'c:X' argument in openNSx is for channels, but our channel numbers
     % might not be contiguous, so it's easier to load all and then slice.
-    nsxData = utils.openNSx('read', rawFilePath);
+    nsxData = utils.openNSx('uv', 'read', char(rawFilePath));
 
     % 4. Slice Channels
     % The 'channel_numbers' field is a string like '1:32' or '33:64'.
@@ -142,6 +142,7 @@ catch ME
     fprintf('Error in prep.run_preparation for unique_id %s:\n', char(jobInfo.unique_id));
     fprintf('%s\n', ME.message);
     success = false;
+    keyboard
 end
 
 end
