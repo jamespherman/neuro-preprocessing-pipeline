@@ -1,5 +1,5 @@
-function success = run_preparation(jobInfo, rawDataDir, kilosortParentDir)
-% RUN_PREPARATION - Converts raw neural data to a Kilosort-ready .dat file.
+function success = prepare_spikes_for_kilosort(jobInfo, rawDataDir, kilosortParentDir)
+% PREPARE_SPIKES_FOR_KILOSORT - Converts raw neural data to a Kilosort-ready .dat file.
 %
 % This function takes a job's information, loads the corresponding raw .ns5 data,
 % extracts the specified channels, and saves the data as a binary .dat file
@@ -91,13 +91,13 @@ try
             fprintf('Channel order validation passed for %s.\n', ...
                 jobInfo.unique_id);
         else
-            warning('prep:run_preparation:mismatch', ...
+            warning('prep:prepare_spikes_for_kilosort:mismatch', ...
                     ['WARNING for %s: Channel order mismatch! Manifest ' ...
                     'specifies ''%s'', but data correlation suggests ''%s''.'], ...
                     jobInfo.unique_id, manifestProbeType, predictedOrdering);
         end
     catch valEx
-        warning('prep:run_preparation:validationFailed', ...
+        warning('prep:prepare_spikes_for_kilosort:validationFailed', ...
                 'Automated channel order validation failed for %s. Error: %s', ...
                 jobInfo.unique_id, valEx.message);
     end
@@ -125,7 +125,7 @@ try
 
 catch ME
     % If any error occurs, display it and return false
-    fprintf('Error in prep.run_preparation for unique_id %s:\n', char(jobInfo.unique_id));
+    fprintf('Error in prep.prepare_spikes_for_kilosort for unique_id %s:\n', char(jobInfo.unique_id));
     fprintf('%s\n', ME.message);
     success = false;
     keyboard

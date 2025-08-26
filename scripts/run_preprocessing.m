@@ -45,34 +45,62 @@ jobs = utils.parse_manifest(manifest_path);
 for i = 1:height(jobs)
     % Get the current job (row)
     job = jobs(i, :);
+    fprintf('Checking job: %s\n', char(job.unique_id));
 
-    try
-        % Check if the job status is 'raw'
-        if strcmp(char(job.status), 'raw')
-            fprintf('Processing job: %s\n', char(job.unique_id));
-
-            % Run the preparation step
-            success = prep.run_preparation(job, config.rawNeuralDataDir, config.analysisOutputDir);
-
-            % If preparation was successful, update the status to 'prepared'
+    % --- Spike Data Preparation ---
+    if strcmp(job.dat_status, 'pending')
+        try
+            fprintf('Beginning spike data preparation for %s...\n', job.unique_id);
+            success = prep.prepare_spikes_for_kilosort(job, config.rawNeuralDataDir, config.kilosortOutputDir);
             if success
-                utils.update_manifest_status(manifest_path, job.unique_id, 'prepared');
-                fprintf('Successfully prepared job: %s\n', char(job.unique_id));
+                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'dat_status');
+                fprintf('Spike data preparation successful for %s.\n', job.unique_id);
             else
-                % The run_preparation function already prints an error, but let's
-                % ensure the status is marked as 'error'.
-                utils.update_manifest_status(manifest_path, job.unique_id, 'error');
-                warning('Preparation failed for job: %s. See function output for details.', char(job.unique_id));
+                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'dat_status');
+                warning('Spike data preparation failed for %s.\n', job.unique_id);
             end
-        else
-            % Optional: Display a message for jobs that are not 'raw'
-            fprintf('Skipping job: %s, Status: %s\n', char(job.unique_id), char(job.status));
+        catch ME
+            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'dat_status');
+            warning('An error occurred during spike data preparation for %s: %s\n', job.unique_id, ME.message);
         end
-    catch ME
-        % If any unexpected error occurs, update the status to 'error'
-        utils.update_manifest_status(manifest_path, job.unique_id, 'error');
-        warning('An unexpected error occurred for job %s: %s', char(job.unique_id), ME.message);
-        % Continue to the next job
+    else
+        fprintf('Spike data preparation already completed or not pending for %s.\n', job.unique_id);
+    end
+
+    % --- Behavioral Data Preparation ---
+    if strcmp(job.behavior_status, 'pending')
+        try
+            fprintf('Beginning behavioral data preparation for %s...\n', job.unique_id);
+            success = prep.prepare_behavioral_data(job, config.rawNeuralDataDir, config.kilosortOutputDir);
+            if success
+                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'behavior_status');
+                fprintf('Behavioral data preparation successful for %s.\n', job.unique_id);
+            else
+                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'behavior_status');
+                warning('Behavioral data preparation failed for %s.\n', job.unique_id);
+            end
+        catch ME
+            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'behavior_status');
+            warning('An error occurred during behavioral data preparation for %s: %s\n', job.unique_id, ME.message);
+        end
+    else
+        fprintf('Behavioral data preparation already completed or not pending for %s.\n', job.unique_id);
+    end
+
+    % --- Automated Kilosort Status Check ---
+    if strcmp(job.kilosort_status, 'pending')
+        fprintf('Checking Kilosort status for %s...\n', job.unique_id);
+        kilosortJobDir = fullfile(config.kilosortOutputDir, job.unique_id);
+        kilosortCompletionFile = fullfile(kilosortJobDir, 'spike_times.npy');
+
+        if exist(kilosortCompletionFile, 'file')
+            utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'kilosort_status');
+            fprintf('Kilosort processing automatically detected as complete for %s.\n', job.unique_id);
+        else
+            fprintf('Kilosort processing not yet complete for %s.\n', job.unique_id);
+        end
+    else
+        fprintf('Kilosort processing already marked as complete for %s.\n', job.unique_id);
     end
 end
 
