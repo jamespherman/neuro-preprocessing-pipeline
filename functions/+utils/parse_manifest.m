@@ -29,7 +29,13 @@ function sessionTable = parse_manifest(manifestPath)
     % --- Validation Checks ---
 
     % 1. Check for the presence of all required columns
-    requiredColumns = {'unique_id', 'session_group_id', 'status', 'channel_numbers', 'raw_filename_base'};
+    requiredColumns = {
+        'unique_id', 'session_group_id', 'monkey', 'date', ...
+        'experiment_pc_name', 'probe_type', 'brain_area', ...
+        'channel_numbers', 'channel_ordering', 'raw_filename_base', ...
+        'dat_status', 'behavior_status', 'kilosort_status', ...
+        'consolidation_status', 'notes'
+    };
 
     for i = 1:length(requiredColumns)
         if ~ismember(requiredColumns{i}, sessionTable.Properties.VariableNames)
@@ -37,17 +43,20 @@ function sessionTable = parse_manifest(manifestPath)
         end
     end
 
-    % 2. Convert the 'status' column to a categorical array to enforce data integrity
-    % This ensures that only predefined status values are present in the table.
-    allowedStatuses = {'raw', 'prepared', 'sorted', 'complete', 'error'};
+    % 2. Validate and convert all status columns to categorical arrays
+    statusColumns = {'dat_status', 'behavior_status', 'kilosort_status', 'consolidation_status'};
+    allowedStatuses = {'pending', 'complete', 'error'};
 
-    try
-        sessionTable.status = categorical(sessionTable.status, allowedStatuses);
-    catch ME
-        % This error typically occurs if a value in the 'status' column is not in 'allowedStatuses'
-        error('parse_manifest:InvalidStatusValue', ...
-            'The "status" column contains invalid values. Only the following are allowed: %s.\nDetails: %s', ...
-            strjoin(allowedStatuses, ', '), ME.message);
+    for i = 1:length(statusColumns)
+        colName = statusColumns{i};
+        try
+            sessionTable.(colName) = categorical(sessionTable.(colName), allowedStatuses);
+        catch ME
+            % This error typically occurs if a value in the status column is not in 'allowedStatuses'
+            error('parse_manifest:InvalidStatusValue', ...
+                'The "%s" column contains invalid values. Only the following are allowed: %s.\nDetails: %s', ...
+                colName, strjoin(allowedStatuses, ', '), ME.message);
+        end
     end
 
     % --- End of Validation ---
