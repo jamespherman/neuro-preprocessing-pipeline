@@ -50,6 +50,9 @@ function success = consolidate_session(job, config)
         success = true;
 
     catch ME
-        fprintf('Error consolidating data for session %s: %s\n', job.unique_id, ME.message);
+    fprintf(2, 'ERROR during data consolidation for %s:\n', job.unique_id); % Print error in red
+    fprintf(2, '%s\n', ME.message);
+    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    keyboard; % Pause execution for debugging
     end
 end

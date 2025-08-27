@@ -88,8 +88,10 @@ try
     success = true;
 
 catch ME
-    fprintf('Error in prep.prepare_spikes_for_kilosort for unique_id %s:\n', char(job.unique_id));
-    fprintf('%s\n', ME.message);
+    fprintf(2, 'ERROR during spike preparation for %s:\n', job.unique_id); % Print error in red
+    fprintf(2, '%s\n', ME.message);
+    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    keyboard; % Pause execution for debugging
     success = false;
 end
 
