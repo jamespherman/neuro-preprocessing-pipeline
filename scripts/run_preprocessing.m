@@ -37,6 +37,7 @@ for i = 1:height(jobs)
             success = prep.prepare_spikes_for_kilosort(job, config);
             if success
                 utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'dat_status');
+                job.dat_status = "complete"; % Update local job variable
                 fprintf('Spike data preparation successful.\n');
             else
                 utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'dat_status');
@@ -55,6 +56,7 @@ for i = 1:height(jobs)
             success = prep.prepare_behavioral_data(job, config);
             if success
                 utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'behavior_status');
+                job.behavior_status = "complete"; % Update local job variable
                 fprintf('Behavioral data preparation successful.\n');
             else
                 utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'behavior_status');
@@ -73,6 +75,7 @@ for i = 1:height(jobs)
         if isfile(kilosortCompletionFile)
             fprintf('Kilosort output detected.\n');
             utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'kilosort_status');
+            job.kilosort_status = "complete"; % Update local job variable
         end
     end
 
@@ -87,6 +90,7 @@ for i = 1:height(jobs)
             success = consolidate.consolidate_session(job, config);
             if success
                 utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'consolidation_status');
+                job.consolidation_status = "complete"; % Update local job variable
                 fprintf('Data consolidation successful.\n');
             else
                 utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
