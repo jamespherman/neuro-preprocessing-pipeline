@@ -28,70 +28,74 @@ jobs = utils.parse_manifest(manifest_path);
 %% --- Process Jobs ---
 for i = 1:height(jobs)
     job = jobs(i, :);
-    fprintf('\n--- Checking job: %s (Status: %s) ---\n', char(job.unique_id), char(job.status));
+    fprintf('\n--- Checking job: %s ---\n', char(job.unique_id));
 
-    switch job.status
-        case 'raw'
-            % --- Data Preparation (Spikes and Behavior) ---
-            try
-                fprintf('Beginning data preparation for %s...\n', job.unique_id);
-
-                % Run spike data preparation
-                spike_success = prep.prepare_spikes_for_kilosort(job, config);
-
-                % Run behavioral data preparation
-                behavior_success = prep.prepare_behavioral_data(job, config);
-
-                if spike_success && behavior_success
-                    utils.update_manifest_status(manifest_path, job.unique_id, 'prepared');
-                    fprintf('Data preparation successful for %s.\n', job.unique_id);
-                else
-                    utils.update_manifest_status(manifest_path, job.unique_id, 'error');
-                    warning('Data preparation failed for %s.\n', job.unique_id);
-                end
-            catch ME
-                utils.update_manifest_status(manifest_path, job.unique_id, 'error');
-                warning('An error occurred during data preparation for %s: %s\n', job.unique_id, ME.message);
-            end
-
-        case 'prepared'
-            % --- Automated Kilosort Status Check ---
-            fprintf('Checking Kilosort status for %s...\n', job.unique_id);
-            kilosortJobDir = fullfile(config.processedDataDir, job.unique_id);
-            kilosortCompletionFile = fullfile(kilosortJobDir, 'spike_times.npy');
-
-            if exist(kilosortCompletionFile, 'file')
-                utils.update_manifest_status(manifest_path, job.unique_id, 'sorted');
-                fprintf('Kilosort processing automatically detected as complete for %s.\n', job.unique_id);
+    % --- 1. Spike Data Preparation ---
+    if strcmp(job.dat_status, "pending")
+        try
+            fprintf('Beginning spike data preparation...\n');
+            success = prep.prepare_spikes_for_kilosort(job, config);
+            if success
+                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'dat_status');
+                fprintf('Spike data preparation successful.\n');
             else
-                fprintf('Kilosort processing not yet complete for %s. This step must be run manually or by an external process.\n', job.unique_id);
+                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'dat_status');
             end
+        catch ME
+            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'dat_status');
+            fprintf(2, 'ERROR during spike prep: %s\n', ME.message);
+            keyboard;
+        end
+    end
 
-        case 'sorted'
-            % --- Data Consolidation ---
-            try
-                fprintf('Beginning data consolidation for %s...\n', job.unique_id);
-                success = consolidate.consolidate_session(job, config);
-                if success
-                    utils.update_manifest_status(manifest_path, job.unique_id, 'complete');
-                    fprintf('Data consolidation successful for %s.\n', job.unique_id);
-                else
-                    utils.update_manifest_status(manifest_path, job.unique_id, 'error');
-                    warning('Data consolidation failed for %s.\n', job.unique_id);
-                end
-            catch ME
-                utils.update_manifest_status(manifest_path, job.unique_id, 'error');
-                warning('An error occurred during data consolidation for %s: %s\n', job.unique_id, ME.message);
+    % --- 2. Behavioral Data Preparation ---
+    if strcmp(job.behavior_status, "pending")
+        try
+            fprintf('Beginning behavioral data preparation...\n');
+            success = prep.prepare_behavioral_data(job, config);
+            if success
+                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'behavior_status');
+                fprintf('Behavioral data preparation successful.\n');
+            else
+                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'behavior_status');
             end
+        catch ME
+            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'behavior_status');
+            fprintf(2, 'ERROR during behavioral prep: %s\n', ME.message);
+            keyboard;
+        end
+    end
 
-        case 'complete'
-            fprintf('Job %s is already complete.\n', job.unique_id);
+    % --- 3. Automated Kilosort Status Check ---
+    if strcmp(job.kilosort_status, "pending")
+        kilosortJobDir = fullfile(config.processedDataDir, job.unique_id);
+        kilosortCompletionFile = fullfile(kilosortJobDir, 'spike_times.npy');
+        if isfile(kilosortCompletionFile)
+            fprintf('Kilosort output detected.\n');
+            utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'kilosort_status');
+        end
+    end
 
-        case 'error'
-            fprintf('Job %s is in an error state. Manual intervention required.\n', job.unique_id);
-
-        otherwise
-            fprintf('Unknown status "%s" for job %s.\n', job.status, job.unique_id);
+    % --- 4. Data Consolidation ---
+    % This step can only run if all prerequisite steps are complete.
+    if strcmp(job.consolidation_status, "pending") && ...
+       strcmp(job.dat_status, "complete") && ...
+       strcmp(job.behavior_status, "complete") && ...
+       strcmp(job.kilosort_status, "complete")
+        try
+            fprintf('Beginning data consolidation...\n');
+            success = consolidate.consolidate_session(job, config);
+            if success
+                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'consolidation_status');
+                fprintf('Data consolidation successful.\n');
+            else
+                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
+            end
+        catch ME
+            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
+            fprintf(2, 'ERROR during consolidation: %s\n', ME.message);
+            keyboard;
+        end
     end
 end
 
