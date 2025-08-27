@@ -92,6 +92,26 @@ for i = 1:height(jobs)
         otherwise
             fprintf('Unknown status "%s" for job %s.\n', job.status, job.unique_id);
     end
+
+    % --- Data Consolidation ---
+    if strcmp(job.consolidation_status, 'pending') && strcmp(job.kilosort_status, 'complete')
+        try
+            fprintf('Beginning data consolidation for %s...\n', job.unique_id);
+            success = consolidate.consolidate_data(job, config);
+            if success
+                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'consolidation_status');
+                fprintf('Data consolidation successful for %s.\n', job.unique_id);
+            else
+                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
+                warning('Data consolidation failed for %s.\n', job.unique_id);
+            end
+        catch ME
+            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
+            warning('An error occurred during data consolidation for %s: %s\n', job.unique_id, ME.message);
+        end
+    else
+        fprintf('Data consolidation already completed or not pending for %s.\n', job.unique_id);
+    end
 end
 
 disp('--- All jobs checked. ---');

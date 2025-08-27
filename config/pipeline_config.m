@@ -16,8 +16,9 @@ function config = pipeline_config()
         'PLDAPS_output', 'output');
     config.analysisOutputDir = fullfile(oneDriveRoot, ...
         'Neuronal Data Analysis');
-    config.kilosortOutputDir = fullfile(oneDriveRoot, 'Kilosort Output');
-    config.intermediateDir = fullfile(oneDriveRoot, 'Intermediate Data');
+
+    config.kilosortOutputDir = fullfile(oneDriveRoot, ...
+        'Neuronal Data Analysis', 'Kilosort-Output');
 
     % Define other parameters
     config.samplingRate = 30000; % Sampling rate in Hz
