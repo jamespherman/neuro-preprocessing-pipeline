@@ -21,6 +21,7 @@ disp('Added project functions & config directory to the MATLAB path.');
 %% --- Load Config and Manifest ---
 project_root = utils.find_project_root;
 config = pipeline_config();
+fprintf('All Processed Data To/From: %s\n', config.processedDataDir);
 manifest_path = fullfile(project_root, 'config', 'session_manifest.csv');
 jobs = utils.parse_manifest(manifest_path);
 
@@ -56,7 +57,7 @@ for i = 1:height(jobs)
         case 'prepared'
             % --- Automated Kilosort Status Check ---
             fprintf('Checking Kilosort status for %s...\n', job.unique_id);
-            kilosortJobDir = fullfile(config.kilosortOutputDir, job.unique_id);
+            kilosortJobDir = fullfile(config.processedDataDir, job.unique_id);
             kilosortCompletionFile = fullfile(kilosortJobDir, 'spike_times.npy');
 
             if exist(kilosortCompletionFile, 'file')

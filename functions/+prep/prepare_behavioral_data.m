@@ -18,7 +18,7 @@ success = false;
 
 %% 1. Construct Paths
 nevFile = fullfile(config.rawNeuralDataDir, job.raw_filename_base);
-intermediateDir = config.intermediateDir;
+intermediateDir = config.processedDataDir;
 
 % Check if the raw .nev file exists
 if ~exist(nevFile, 'file')

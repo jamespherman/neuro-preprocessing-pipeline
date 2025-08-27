@@ -11,15 +11,10 @@ function success = consolidate_session(job, config)
     success = false; % Default to failure
 
     try
-        % Construct paths
-        kilosortDir = fullfile(config.kilosortOutputDir, job.unique_id);
-        behavioralDataPath = fullfile(config.intermediateDir, [job.unique_id '_intermediate_data.mat']);
-        outputDir = config.analysisOutputDir;
-
-        % Create output directory if it doesn't exist
-        if ~exist(outputDir, 'dir')
-            mkdir(outputDir);
-        end
+        jobDataDir = fullfile(config.processedDataDir, job.unique_id);
+        kilosortDir = jobDataDir;
+        behavioralDataPath = fullfile(jobDataDir, [job.unique_id '_intermediate_data.mat']);
+        outputDir = jobDataDir;
 
         % Load intermediate behavioral data
         if ~exist(behavioralDataPath, 'file')
