@@ -1,19 +1,20 @@
-function update_manifest_status(manifestPath, unique_id, newStatus)
-% UPDATE_MANIFEST_STATUS - Finds a job by its unique_id and updates its status.
+function update_manifest_status(manifestPath, unique_id, newStatus, statusColumn)
+% UPDATE_MANIFEST_STATUS - Finds a job by its unique_id and updates its status
+% in a specified column.
 %
-% This function programmatically and safely updates the status of a single
-% job entry in the specified sessions_manifest.csv file. It is designed to
-% be called by automated scripts after a processing stage is completed or fails.
+% This function programmatically and safely updates a specified status column
+% for a single job entry in the given manifest file. It is designed for use in
+% automated scripts where a job's state needs to be tracked.
 %
 % Inputs:
-%   manifestPath (string) - The full file path to the sessions_manifest.csv file.
+%   manifestPath (string) - The full file path to the manifest CSV file.
 %   unique_id    (string) - The ID of the job/row to update.
-%   newStatus    (string) - The new status to write for the job (e.g.,
-%                           'prepared', 'complete', 'error').
+%   newStatus    (string) - The new status to write for the job.
+%   statusColumn (string) - The name of the column to update with the new status.
 %
 % Requirements:
 % - The manifest file must be a valid CSV.
-% - The file must contain 'unique_id' and 'status' columns.
+% - The file must contain a 'unique_id' column and the specified 'statusColumn'.
 %
 %- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
@@ -53,9 +54,8 @@ function update_manifest_status(manifestPath, unique_id, newStatus)
                 'Found multiple rows with the unique_id "%s". Updating all found entries.', char(unique_id));
     end
 
-    % Update the 'status' column for the found row(s).
-    % newStatus is a string or char, which can be directly assigned.
-    manifestTable.status(rowIndex) = string(newStatus);
+    % Update the specified status column for the found row(s).
+    manifestTable.(statusColumn)(rowIndex) = string(newStatus);
 
     % --- 4. Write the Updated Table Back to File ---
     % Write the entire modified table back to the original file path.
