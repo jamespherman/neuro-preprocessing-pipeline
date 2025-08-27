@@ -44,8 +44,10 @@ for i = 1:height(jobs)
             end
         catch ME
             utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'dat_status');
-            fprintf(2, 'ERROR during spike prep: %s\n', ME.message);
-            keyboard;
+    fprintf(2, 'ERROR during spike prep for %s:\n', job.unique_id); % Print error in red
+    fprintf(2, '%s\n', ME.message);
+    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    keyboard; % Pause execution for debugging
         end
     end
 
@@ -63,8 +65,10 @@ for i = 1:height(jobs)
             end
         catch ME
             utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'behavior_status');
-            fprintf(2, 'ERROR during behavioral prep: %s\n', ME.message);
-            keyboard;
+    fprintf(2, 'ERROR during behavioral prep for %s:\n', job.unique_id); % Print error in red
+    fprintf(2, '%s\n', ME.message);
+    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    keyboard; % Pause execution for debugging
         end
     end
 
@@ -97,8 +101,10 @@ for i = 1:height(jobs)
             end
         catch ME
             utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
-            fprintf(2, 'ERROR during consolidation: %s\n', ME.message);
-            keyboard;
+    fprintf(2, 'ERROR during data consolidation for %s:\n', job.unique_id); % Print error in red
+    fprintf(2, '%s\n', ME.message);
+    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    keyboard; % Pause execution for debugging
         end
     end
 end

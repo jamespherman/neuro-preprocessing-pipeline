@@ -82,7 +82,9 @@ for i = 1:length(candidateFiles)
             end
         end
     catch ME
-        fprintf('  Error loading or checking file %s: %s\n', candidateFiles(i).name, ME.message);
+        fprintf(2, '  Error loading or checking file %s: %s\n', candidateFiles(i).name, ME.message);
+        warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue or ''dbquit'' to exit.');
+        keyboard; % Pause execution for debugging
     end
 end
 
@@ -160,8 +162,10 @@ try
     success = true;
     fprintf('Successfully created intermediate data file.\n');
 catch ME
-    fprintf('ERROR: Could not save intermediate data file.\n');
-    fprintf('Error message: %s\n', ME.message);
+    fprintf(2, 'ERROR during behavioral data preparation for %s:\n', job.unique_id); % Print error in red
+    fprintf(2, '%s\n', ME.message);
+    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    keyboard; % Pause execution for debugging
     success = false;
 end
 
