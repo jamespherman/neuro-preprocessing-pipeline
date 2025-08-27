@@ -15,7 +15,7 @@ function success = prepare_spikes_for_kilosort(job, config)
 
 try
     % 1. Construct Paths
-    kilosortOutputDir = fullfile(config.kilosortOutputDir, job.unique_id);
+    kilosortOutputDir = fullfile(config.processedDataDir, job.unique_id);
     rawFilePath = fullfile(config.rawNeuralDataDir, job.raw_filename_base + ".ns5");
     datFilePath = fullfile(kilosortOutputDir, job.unique_id + ".dat");
 

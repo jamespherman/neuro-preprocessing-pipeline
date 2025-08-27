@@ -14,12 +14,10 @@ function config = pipeline_config()
     config.rawNeuralDataDir = fullfile(oneDriveRoot, 'Neuronal Data');
     config.behavioralDataDir = fullfile(oneDriveRoot, 'Behavioral Data', ...
         'PLDAPS_output', 'output');
-    config.analysisOutputDir = fullfile(oneDriveRoot, ...
-        'Neuronal Data Analysis');
-    config.kilosortOutputDir = fullfile(oneDriveRoot, 'Kilosort Output');
-    config.intermediateDir = fullfile(oneDriveRoot, 'Intermediate Data');
+    % Define a SINGLE parent directory for ALL processed data.
+    config.processedDataDir = fullfile(oneDriveRoot, 'Neuronal Data Analysis');
 
-    % Define other parameters
+    % Other Parameters
     config.samplingRate = 30000; % Sampling rate in Hz
 
 end
