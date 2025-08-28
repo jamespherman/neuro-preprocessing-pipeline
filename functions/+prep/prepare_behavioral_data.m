@@ -17,7 +17,8 @@ function success = prepare_behavioral_data(job, config)
 success = false;
 
 %% 1. Construct Paths
-nevFile = fullfile(config.rawNeuralDataDir, job.raw_filename_base);
+nevFile = fullfile(config.rawNeuralDataDir, job.raw_filename_base + ...
+    ".nev");
 intermediateDir = config.processedDataDir;
 
 % Check if the raw .nev file exists
@@ -56,7 +57,7 @@ fprintf('Searching for PLDAPS file in: %s\n', config.behavioralDataDir);
 % The `parse_manifest` function does not list them as required columns. This is another inconsistency.
 % I will have to proceed with the assumption that they exist in the job table.
 
-datePattern = ['*' job.date '*.mat'];
+datePattern = "*" + job.date + "*.mat";
 candidateFiles = dir(fullfile(config.behavioralDataDir, datePattern));
 
 pdsFileFound = false;
