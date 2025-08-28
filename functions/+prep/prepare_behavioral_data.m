@@ -49,58 +49,88 @@ nNevTrials = numel(eventValuesTrials);
 fprintf('Found %d trials in NEV file.\n', nNevTrials);
 
 %% 3. Find and Load Matching PLDAPS Data
-fprintf('Searching for PLDAPS file in: %s\n', config.behavioralDataDir);
-% This part of the logic for finding the PDS file seems fragile and dependent on `job.date` and `job.experiment_pc_name`
-% which are not in the manifest according to `parse_manifest`.
-% I will assume for now that the user will fix this, or that these fields are present in the manifest they are using.
-% To make this runnable, I'll have to guess what `job.date` and `job.experiment_pc_name` are.
-% The `parse_manifest` function does not list them as required columns. This is another inconsistency.
-% I will have to proceed with the assumption that they exist in the job table.
+fprintf('Searching for PLDAPS data in: %s\n', config.behavioralDataDir);
 
-datePattern = "*" + job.date + "*.mat";
-candidateFiles = dir(fullfile(config.behavioralDataDir, datePattern));
+% Construct a search pattern to find both files and directories
+searchPattern = fullfile(config.behavioralDataDir, ['*' job.date '*']);
+listing = dir(searchPattern);
 
-pdsFileFound = false;
-PDS = [];
-for i = 1:length(candidateFiles)
-    filePath = fullfile(candidateFiles(i).folder, candidateFiles(i).name);
-    fprintf('  Loading candidate file: %s\n', candidateFiles(i).name);
+found_flag = false;
+p_data = [];
 
-    try
-        data = load(filePath, 'PDS');
-        if isfield(data, 'PDS')
-            if isfield(data.PDS, 'initialParameters') && ...
-               isfield(data.PDS.initialParameters, 'output') && ...
-               isfield(data.PDS.initialParameters.output, 'pc_name') && ...
-               strcmp(data.PDS.initialParameters.output.pc_name, job.experiment_pc_name)
+% Iterate through all matching file system items
+for i = 1:length(listing)
+    item = listing(i);
+    itemPath = fullfile(item.folder, item.name);
 
-                PDS = data.PDS;
-                pdsFileFound = true;
-                fprintf('  --> Found matching PLDAPS file.\n');
-                break;
-            else
-                fprintf('  --> PC name does not match. Skipping.\n');
+    matFilePath = '';
+
+    if item.isdir
+        % It's a directory, check for a pre-existing .mat file
+        potentialMatFile = fullfile(item.folder, [item.name '.mat']);
+        if exist(potentialMatFile, 'file')
+            fprintf('  Found matching summary file for directory: %s\n', item.name);
+            matFilePath = potentialMatFile;
+        else
+            % If no .mat file, create it by calling utils.catOldOutput
+            fprintf('  Found unconsolidated data directory: %s. Consolidating...\n', item.name);
+            try
+                matFilePath = utils.catOldOutput(itemPath);
+                fprintf('  --> Successfully created summary file: %s\n', matFilePath);
+            catch ME
+                fprintf(2, '  Error consolidating directory %s: %s\n', item.name, ME.message);
+                continue; % Try the next item
             end
         end
-    catch ME
-        fprintf(2, '  Error loading or checking file %s: %s\n', candidateFiles(i).name, ME.message);
-        warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue or ''dbquit'' to exit.');
-        keyboard; % Pause execution for debugging
+    elseif endsWith(item.name, '.mat')
+        % It's already a .mat file
+        matFilePath = itemPath;
+    else
+        % Not a directory or a .mat file, so skip
+        continue;
+    end
+
+    if ~isempty(matFilePath)
+        fprintf('  Loading candidate file: %s\n', matFilePath);
+        try
+            % Load the 'p' structure specifically
+            data = load(matFilePath, 'p');
+
+            % Validate that the 'p' structure exists and has the correct PC name
+            if isfield(data, 'p')
+                % The PC name field is located at data.p.init.pcName
+                if isfield(data.p, 'init') && isfield(data.p.init, 'pcName') && ...
+                   strcmp(data.p.init.pcName, job.experiment_pc_name)
+
+                    p_data = data.p;
+                    found_flag = true;
+                    fprintf('  --> Found and validated matching PLDAPS data.\n');
+                    break; % Exit loop once found
+                else
+                    fprintf('  --> PC name does not match. Skipping.\n');
+                end
+            else
+                fprintf('  --> File does not contain the expected ''p'' structure. Skipping.\n');
+            end
+        catch ME
+            fprintf(2, '  Error loading or checking file %s: %s\n', matFilePath, ME.message);
+        end
     end
 end
 
-if ~pdsFileFound
-    fprintf('ERROR: No matching PLDAPS file found for date %s and PC %s.\n', job.date, job.experiment_pc_name);
+% Final error handling after checking all candidates
+if ~found_flag
+    fprintf('ERROR: No matching PLDAPS data (file or directory) found for date %s and PC %s.\n', job.date, job.experiment_pc_name);
     return;
 end
 
 %% 4. Match Trials and Integrate Data
-nPdsTrials = numel(PDS.data);
+nPdsTrials = numel(p_data.data);
 fprintf('Found %d trials in PLDAPS file. Matching with NEV trials...\n', nPdsTrials);
 
 pdsTrialOffset = -1;
 for offset = 0:min(5, nPdsTrials-1)
-    pdsStrobes = PDS.data{1+offset}.strobed;
+    pdsStrobes = p_data.data{1+offset}.strobed;
     nevStrobes = eventValuesTrials{1};
     if isequal(pdsStrobes(pdsStrobes <= 255), nevStrobes(nevStrobes <= 255))
         pdsTrialOffset = offset;
@@ -125,8 +155,8 @@ for i = 1:nMatchedTrials
         break;
     end
 
-    if pdsIdx <= numel(PDS.conditions)
-        cond = PDS.conditions{pdsIdx};
+    if pdsIdx <= numel(p_data.conditions)
+        cond = p_data.conditions{pdsIdx};
         fields = fieldnames(cond);
         for f = 1:numel(fields)
             if isfield(trialInfo, fields{f}) && numel(trialInfo.(fields{f})) >= nevIdx
@@ -137,7 +167,7 @@ for i = 1:nMatchedTrials
         end
     end
 
-    pdsTrialData = PDS.data{pdsIdx};
+    pdsTrialData = p_data.data{pdsIdx};
     trialInfo.pdsTrialEndState{nevIdx,1} = pdsTrialData.trialEndState;
     trialInfo.pdsTrialRepeatFlag(nevIdx,1) = pdsTrialData.trialRepeatFlag;
 
