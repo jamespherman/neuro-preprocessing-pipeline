@@ -1,5 +1,9 @@
 function sessionFileName = catOldOutput(varargin)
 
+% Turn off function handle warning
+warningState = warning('off', ...
+    'MATLAB:load:cannotInstantiateFunctionHandle');
+
 % if the user supplies a directory, use that, otherwise, prompt user to
 % select one:
 if nargin < 1
@@ -31,6 +35,10 @@ end
 
 % tell user we're back to "idle"
 disp('Done saving.');
+
+% Restore the original warning state
+warning(warningState);
+
 end
 
 function p = lp(sessionFolder)

@@ -51,8 +51,14 @@ fprintf('Found %d trials in NEV file.\n', nNevTrials);
 %% 3. Find and Load Matching PLDAPS Data
 fprintf('Searching for PLDAPS data in: %s\n', config.behavioralDataDir);
 
-% Construct a search pattern to find both files and directories
-searchPattern = fullfile(config.behavioralDataDir, ['*' job.date '*']);
+% Construct a search pattern to find both files and directories. Convert 
+% job.date to datetime, change format to 'YYYYMMDD', construct
+% 'searchPattern' from reformatted date, and list directory contents that
+% match searchPattern:
+dateObj = datetime(job.date, 'InputFormat', 'MM_dd_yyyy');
+formattedDate = string(dateObj, 'yyyyMMdd');
+searchPattern = string(config.behavioralDataDir) + string(filesep) + ...
+    "*" + formattedDate + "*";
 listing = dir(searchPattern);
 
 found_flag = false;
