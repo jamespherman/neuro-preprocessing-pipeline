@@ -100,7 +100,7 @@ for i = 1:length(listing)
             if isfield(data, 'p')
                 % The PC name field is located at data.p.init.pcName
                 if isfield(data.p, 'init') && isfield(data.p.init, 'pcName') && ...
-                   strcmp(data.p.init.pcName, job.experiment_pc_name)
+                   strcmp(string(data.p.init.pcName(1:end-1)), job.experiment_pc_name)
 
                     p_data = data.p;
                     found_flag = true;
