@@ -152,30 +152,35 @@ end
 nPdsTrials = numel(p_data.trVars);
 fprintf('Found %d trials in PLDAPS file. Matching with NEV trials...\n', nPdsTrials);
 
-% Trial alignment logic remains the same, but it must handle the case where
-% strobed data is not present in the first few trial data structs, which can
-% happen if the recording is started mid-session.
-pdsTrialOffset = -1;
-for offset = 0:min(5, nPdsTrials - 1)
-    % Ensure the field exists before trying to access it
-    if isfield(p_data.trData, 'strobed') && numel(p_data.trData(1+offset).strobed) > 0
-        pdsStrobes = p_data.trData(1+offset).strobed;
-        nevStrobes = eventValuesTrials{1};
-        if isequal(pdsStrobes(pdsStrobes <= 255), nevStrobes(nevStrobes <= 255))
-            pdsTrialOffset = offset;
-            fprintf('  Found trial alignment offset: %d\n', pdsTrialOffset);
-            break;
-        end
+% After the master p_data struct is created (at the end of Phase 1), extract
+% all PLDAPS trial strobes into a clean cell array. Ensure they are column
+% vectors for consistent comparison.
+pds_strobes = arrayfun(@(x) x.strobed(:), p_data.trData, 'UniformOutput', false);
+
+% Create the NEV-to-PLDAPS Mapping
+fprintf('Aligning NEV and PLDAPS trials via exhaustive strobe search...\n');
+nev_to_pds_map = nan(nNevTrials, 1);
+
+% Now, implement the cellfun mapping logic. Loop through each NEV trial,
+% find its match in the pds_strobes cell array, and record the index.
+for i = 1:nNevTrials
+    nev_strobe_vector = eventValuesTrials{i}(:);
+
+    % Use cellfun to find a match in the PLDAPS strobes
+    match_idx = find(cellfun(@(x) isequal(x, nev_strobe_vector), pds_strobes), 1);
+
+    if ~isempty(match_idx)
+        nev_to_pds_map(i) = match_idx;
     end
 end
 
-if pdsTrialOffset == -1
+nMatchedTrials = sum(~isnan(nev_to_pds_map));
+fprintf('Found %d matched trials between NEV and PLDAPS data.\n', nMatchedTrials);
+
+if nMatchedTrials == 0
     fprintf('ERROR: Could not align NEV and PLDAPS trial strobes.\n');
     return;
 end
-
-nMatchedTrials = min(nNevTrials, nPdsTrials - pdsTrialOffset);
-fprintf('Integrating data for %d matched trials.\n', nMatchedTrials);
 
 % Dynamically discover all unique timing fields from p.trData.timing
 allTimingFields = {};
@@ -198,11 +203,18 @@ end
 
 % --- Dynamic pre-allocation for trialInfo table from p.trVars and p.trData ---
 existingTrialInfoFields = trialInfo.Properties.VariableNames;
-firstValidPdsTrial = 1 + pdsTrialOffset;
+
+% Find the first PDS trial that has a corresponding NEV trial
+firstValidPdsIdx = find(~isnan(nev_to_pds_map), 1);
+if ~isempty(firstValidPdsIdx)
+    firstValidPdsTrial = nev_to_pds_map(firstValidPdsIdx);
+else
+    firstValidPdsTrial = []; % Handle case with no matches
+end
 
 % Keep track of fields to populate to avoid re-checking conditions in the loop
 trVarsFieldsToCopy = {};
-if pdsTrialOffset > -1 && nPdsTrials >= firstValidPdsTrial
+if ~isempty(firstValidPdsTrial)
     allTrVarsFields = fieldnames(p_data.trVars(firstValidPdsTrial));
     fprintf('  Pre-allocating fields from p.trVars...\n');
     for f = 1:numel(allTrVarsFields)
@@ -220,7 +232,7 @@ if pdsTrialOffset > -1 && nPdsTrials >= firstValidPdsTrial
 end
 
 trDataFieldsToCopy = {};
-if pdsTrialOffset > -1 && nPdsTrials >= firstValidPdsTrial
+if ~isempty(firstValidPdsTrial)
     allTrDataFields = fieldnames(p_data.trData(firstValidPdsTrial));
     fprintf('  Pre-allocating non-structural fields from p.trData...\n');
     for f = 1:numel(allTrDataFields)
@@ -241,12 +253,13 @@ end
 
 
 % New, robust integration loop
-for i = 1:nMatchedTrials
-    nevIdx = i;
-    pdsIdx = i + pdsTrialOffset;
+for nevIdx = 1:nNevTrials
+    pdsIdx = nev_to_pds_map(nevIdx);
 
-    % Dynamically copy data for fields discovered from p.trVars
-    for f = 1:numel(trVarsFieldsToCopy)
+    % Only copy data if a match was found for this NEV trial
+    if ~isnan(pdsIdx)
+        % Dynamically copy data for fields discovered from p.trVars
+        for f = 1:numel(trVarsFieldsToCopy)
         fieldName = trVarsFieldsToCopy{f};
         if isfield(p_data.trVars(pdsIdx), fieldName)
             dataValue = p_data.trVars(pdsIdx).(fieldName);
@@ -293,6 +306,7 @@ for i = 1:nMatchedTrials
                 eventTimes.(pdsFieldName)(nevIdx) = timingData.(timingFields{t});
             end
         end
+    end
     end
 end
 
