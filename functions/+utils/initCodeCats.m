@@ -112,6 +112,10 @@ codes.saccadeOnset      = 0;
 codes.saccadeOffset     = 0;
 codes.blinkDuringSac    = 0;
 
+% used in seansfirsttask
+codes.saccToTargetOne	= 0; % Used to identify which target monkey made a saccade to
+codes.saccToTargetTwo	= 0;
+
 %% target codes (used in gSac)
 codes.targetOn          = 0;
 codes.targetDim         = 0;
@@ -129,6 +133,21 @@ codes.stimLoc1Elev      = 1;
 codes.stimLoc1Ecc       = 1;
 codes.stimLoc2Elev      = 1;
 codes.stimLoc2Ecc       = 1;
+
+% tokens task codes
+codes.CUE_ON = 0; % [cite: 1]
+codes.REWARD_GIVEN = 0; % [cite: 1]
+codes.TRIAL_END = 0; % [cite: 1]
+codes.REWARD_AMOUNT_BASE = 1; % Base for strobing reward amount [cite: 1]
+codes.OUTCOME_DIST_BASE = 1; % Base for strobing outcome distribution type [cite: 1]
+codes.rwdAmt = 1;
+
+% gSac_4factors codes
+codes.halfBlock     = 1;
+codes.stimType      = 1;
+codes.salience      = 1;
+codes.targetColor   = 1;
+codes.targetLocIdx  = 1;
 
 %% stimulus codes (used in mcd, pFix, etc.)
 
