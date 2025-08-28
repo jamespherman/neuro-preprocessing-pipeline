@@ -72,7 +72,14 @@ for i = 1:length(listing)
     matFilePath = '';
 
     if item.isdir
-        % It's a directory, check for a pre-existing .mat file
+        % It's a directory, first check for the number of .mat files
+        matFilesInDir = dir(fullfile(itemPath, '*.mat'));
+        if numel(matFilesInDir) < 25
+            fprintf('  --> Skipping directory, contains fewer than 25 trials.\n');
+            continue;
+        end
+
+        % Now, check for a pre-existing .mat file
         potentialMatFile = fullfile(item.folder, [item.name '.mat']);
         if exist(potentialMatFile, 'file')
             fprintf('  Found matching summary file for directory: %s\n', item.name);
@@ -99,24 +106,34 @@ for i = 1:length(listing)
     if ~isempty(matFilePath)
         fprintf('  Loading candidate file: %s\n', matFilePath);
         try
-            % Load the 'p' structure specifically
-            data = load(matFilePath, 'p');
+            matObj = matfile(matFilePath);
+            varInfo = whos(matObj);
 
-            % Validate that the 'p' structure exists and has the correct PC name
-            if isfield(data, 'p')
-                % The PC name field is located at data.p.init.pcName
-                if isfield(data.p, 'init') && isfield(data.p.init, 'pcName') && ...
-                   strcmp(string(data.p.init.pcName(1:end-1)), job.experiment_pc_name)
-
-                    p_data = data.p;
-                    found_flag = true;
-                    fprintf('  --> Found and validated matching PLDAPS data.\n');
-                    break; % Exit loop once found
-                else
-                    fprintf('  --> PC name does not match. Skipping.\n');
-                end
+            if ismember('p', {varInfo.name})
+                % If 'p' exists, load it directly
+                data = load(matFilePath, 'p');
+                p_candidate = data.p;
             else
-                fprintf('  --> File does not contain the expected ''p'' structure. Skipping.\n');
+                % If 'p' does not exist, load all variables and syntesize p
+                all_vars = load(matFilePath);
+                p_candidate = struct();
+                fields = fieldnames(all_vars);
+                for k = 1:numel(fields)
+                    p_candidate.(fields{k}) = all_vars.(fields{k});
+                end
+            end
+
+            % Validate that the candidate structure has the correct PC name
+            if isfield(p_candidate, 'init') && isfield(p_candidate.init, 'pcName') && ...
+               strcmp(string(p_candidate.init.pcName(1:end-1)), job.experiment_pc_name)
+
+                p_data = p_candidate;
+                found_flag = true;
+                close(findobj('Type', 'Figure'));
+                fprintf('  --> Found and validated matching PLDAPS data.\n');
+                break; % Exit loop once found
+            else
+                fprintf('  --> PC name does not match. Skipping.\n');
             end
         catch ME
             fprintf(2, '  Error loading or checking file %s: %s\n', matFilePath, ME.message);

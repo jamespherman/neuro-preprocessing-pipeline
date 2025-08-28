@@ -83,14 +83,59 @@ idxTrial  = find(arrayfun(@(x) any(strfind(x.name, 'trial') & strfind(x.name, '.
 % load the 'p file' into 'p':
 p = load(fullfile(sessionFolder, fileList(idxP).name));
 
-% load each 'trial file' into a struct array:
 nTrials = numel(idxTrial);
+
+% First pass: discover all field names
+all_trVars_fields = {};
+all_trData_fields = {};
 for iTr = 1:nTrials
     filePath = fullfile(sessionFolder, fileList(idxTrial(iTr)).name);
-    tmp = load(filePath);
+    trial_data = load(filePath);
+    close(findobj('Type', 'Figure'));
+
+    if isfield(trial_data, 'trVars')
+        all_trVars_fields = union(all_trVars_fields, fieldnames(trial_data.trVars));
+    end
+    if isfield(trial_data, 'trData')
+        all_trData_fields = union(all_trData_fields, fieldnames(trial_data.trData));
+    end
+end
+
+% Pre-allocate struct arrays
+if ~isempty(all_trVars_fields)
+    trVars_template = cell2struct(cell(size(all_trVars_fields)), all_trVars_fields, 1);
+    p.trVars = repmat(trVars_template, nTrials, 1);
+else
+    p.trVars = struct([]);
+end
+
+if ~isempty(all_trData_fields)
+    trData_template = cell2struct(cell(size(all_trData_fields)), all_trData_fields, 1);
+    p.trData = repmat(trData_template, nTrials, 1);
+else
+    p.trData = struct([]);
+end
+
+
+% Second pass: build the final struct array
+for iTr = 1:nTrials
+    filePath = fullfile(sessionFolder, fileList(idxTrial(iTr)).name);
+    trial_data = load(filePath);
+    close(findobj('Type', 'Figure'));
+
+    if isfield(trial_data, 'trVars')
+        current_fields = fieldnames(trial_data.trVars);
+        for j = 1:numel(current_fields)
+            p.trVars(iTr).(current_fields{j}) = trial_data.trVars.(current_fields{j});
+        end
+    end
     
-    p.trVars(iTr,1) = tmp.trVars;
-    p.trData(iTr,1) = tmp.trData;
+    if isfield(trial_data, 'trData')
+        current_fields = fieldnames(trial_data.trData);
+        for j = 1:numel(current_fields)
+            p.trData(iTr).(current_fields{j}) = trial_data.trData.(current_fields{j});
+        end
+    end
 end
 
 end
