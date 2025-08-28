@@ -43,21 +43,21 @@ function sessionTable = parse_manifest(manifestPath)
         end
     end
 
-    % 2. Validate and convert all status columns to categorical arrays
+    % 2. Validate status columns without converting to categorical
     statusColumns = {'dat_status', 'behavior_status', 'kilosort_status', 'consolidation_status'};
     allowedStatuses = {'pending', 'complete', 'error'};
 
     for i = 1:length(statusColumns)
         colName = statusColumns{i};
-        try
-            sessionTable.(colName) = categorical(sessionTable.(colName), allowedStatuses);
-        catch ME
-            % This error typically occurs if a value in the status column is not in 'allowedStatuses'
+        invalidEntries = ~ismember(sessionTable.(colName), allowedStatuses);
+        if any(invalidEntries)
             error('parse_manifest:InvalidStatusValue', ...
-                'The "%s" column contains invalid values. Only the following are allowed: %s.\nDetails: %s', ...
-                colName, strjoin(allowedStatuses, ', '), ME.message);
+                'The "%s" column contains invalid values: %s. Only the following are allowed: %s.', ...
+                colName, strjoin(unique(sessionTable.(colName)(invalidEntries)), ', '), strjoin(allowedStatuses, ', '));
         end
     end
+
+    % --- End of Validation ---
 
     % --- End of Validation ---
 
