@@ -37,7 +37,10 @@ codes.uniqueTaskCode_tod        = 1;
 codes.uniqueTaskCode_scd        = 1;
 codes.uniqueTaskCode_nfl        = 1;
 codes.uniqueTaskCode_gSac_jph  	= 1;
-codes.uniqueTaskCode_gSac_contrast  	= 1;
+codes.uniqueTaskCode_gSac_contrast  = 1;
+codes.uniqueTaskCode_seansFirstTask = 1;
+codes.uniqueTaskCode_tokens         = 1;
+codes.uniqueTaskCode_gSac_4factors  = 1;
 
 %% unique codes that are internal to the 'classyStrobe' function class
 % (see pds.classyStrobe.m for more details)
