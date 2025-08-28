@@ -125,17 +125,24 @@ if ~found_flag
 end
 
 %% 4. Match Trials and Integrate Data
-nPdsTrials = numel(p_data.data);
+% The new logic correctly uses p.trVars and p.trData
+nPdsTrials = numel(p_data.trVars);
 fprintf('Found %d trials in PLDAPS file. Matching with NEV trials...\n', nPdsTrials);
 
+% Trial alignment logic remains the same, but it must handle the case where
+% strobed data is not present in the first few trial data structs, which can
+% happen if the recording is started mid-session.
 pdsTrialOffset = -1;
-for offset = 0:min(5, nPdsTrials-1)
-    pdsStrobes = p_data.data{1+offset}.strobed;
-    nevStrobes = eventValuesTrials{1};
-    if isequal(pdsStrobes(pdsStrobes <= 255), nevStrobes(nevStrobes <= 255))
-        pdsTrialOffset = offset;
-        fprintf('  Found trial alignment offset: %d\n', pdsTrialOffset);
-        break;
+for offset = 0:min(5, nPdsTrials - 1)
+    % Ensure the field exists before trying to access it
+    if isfield(p_data.trData, 'strobed') && numel(p_data.trData(1+offset).strobed) > 0
+        pdsStrobes = p_data.trData(1+offset).strobed;
+        nevStrobes = eventValuesTrials{1};
+        if isequal(pdsStrobes(pdsStrobes <= 255), nevStrobes(nevStrobes <= 255))
+            pdsTrialOffset = offset;
+            fprintf('  Found trial alignment offset: %d\n', pdsTrialOffset);
+            break;
+        end
     end
 end
 
@@ -147,38 +154,57 @@ end
 nMatchedTrials = min(nNevTrials, nPdsTrials - pdsTrialOffset);
 fprintf('Integrating data for %d matched trials.\n', nMatchedTrials);
 
+% Pre-allocate all potential pds-derived timing fields in eventTimes
+% This ensures all arrays are the same size, even if some events don't
+% occur in a given session. This list is a superset of fields found
+% across all the data dictionaries.
+timingFieldsToPreallocate = {
+    'pdsFixOn', 'pdsFixAq', 'pdsFixOff', 'pdsTargetOn', 'pdsTargetOff', ...
+    'pdsTargetReillum', 'pdsTargetAq', 'pdsSaccadeOnset', 'pdsSaccadeOffset', ...
+    'pdsBrokeFix', 'pdsReward', 'pdsTone', 'pdsJoyPress', 'pdsJoyRelease', ...
+    'pdsStimOn', 'pdsStimOff', 'pdsCueOn', 'pdsCueOff', 'pdsStimChg', ...
+    'pdsBrokeJoy', 'pdsOutcomeOn'
+    };
+for f = 1:numel(timingFieldsToPreallocate)
+    eventTimes.(timingFieldsToPreallocate{f}) = nan(nNevTrials, 1);
+end
+
+
+% New, robust integration loop
 for i = 1:nMatchedTrials
     nevIdx = i;
     pdsIdx = i + pdsTrialOffset;
 
-    if pdsIdx > nPdsTrials
-        break;
+    % Explicitly map trial variables from p.trVars
+    trialInfo.isVisSac(nevIdx,1) = p_data.trVars(pdsIdx).isVisSac;
+    trialInfo.targetDegX(nevIdx,1) = p_data.trVars(pdsIdx).targDegX;
+    trialInfo.targetDegY(nevIdx,1) = p_data.trVars(pdsIdx).targDegY;
+    trialInfo.rewardDurationMs(nevIdx,1) = p_data.trVars(pdsIdx).rewardDurationMs;
+    % Add more mappings here as needed for analysis
+
+    % Map trial outcomes from p.trData
+    trialInfo.trialEndState(nevIdx,1) = p_data.trData(pdsIdx).trialEndState;
+
+    % Safely map trialRepeatFlag, as it may not always be present
+    if isfield(p_data.trData, 'trialRepeatFlag')
+        trialInfo.trialRepeatFlag(nevIdx,1) = p_data.trData(pdsIdx).trialRepeatFlag;
+    else
+        trialInfo.trialRepeatFlag(nevIdx,1) = NaN; % Or a suitable default
     end
 
-    if pdsIdx <= numel(p_data.conditions)
-        cond = p_data.conditions{pdsIdx};
-        fields = fieldnames(cond);
-        for f = 1:numel(fields)
-            if isfield(trialInfo, fields{f}) && numel(trialInfo.(fields{f})) >= nevIdx
-                trialInfo.(fields{f})(nevIdx) = cond.(fields{f});
-            else
-                trialInfo.(fields{f})(nevIdx,1) = cond.(fields{f});
-            end
-        end
-    end
+    % Map detailed event timestamps from p.trData.timing
+    if isfield(p_data.trData(pdsIdx), 'timing') && ...
+            isstruct(p_data.trData(pdsIdx).timing)
 
-    pdsTrialData = p_data.data{pdsIdx};
-    trialInfo.pdsTrialEndState{nevIdx,1} = pdsTrialData.trialEndState;
-    trialInfo.pdsTrialRepeatFlag(nevIdx,1) = pdsTrialData.trialRepeatFlag;
+        timingData = p_data.trData(pdsIdx).timing;
+        timingFields = fieldnames(timingData);
 
-    if isfield(pdsTrialData, 'timing')
-        timingFields = fieldnames(pdsTrialData.timing);
         for t = 1:numel(timingFields)
-            newFieldName = ['pds' timingFields{t}];
-            if ~isfield(eventTimes, newFieldName)
-                eventTimes.(newFieldName) = nan(nNevTrials, 1);
+            pdsFieldName = ['pds' upper(timingFields{t}(1)) timingFields{t}(2:end)];
+            % Ensure the field was pre-allocated to avoid typos causing errors
+            if isfield(eventTimes, pdsFieldName)
+                eventTimes.(pdsFieldName)(nevIdx) = timingData.(timingFields{t});
             end
-            eventTimes.(newFieldName)(nevIdx) = pdsTrialData.timing.(timingFields{t});
         end
     end
 end
