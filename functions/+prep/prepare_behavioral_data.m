@@ -61,8 +61,8 @@ searchPattern = string(config.behavioralDataDir) + string(filesep) + ...
     "*" + formattedDate + "*";
 listing = dir(searchPattern);
 
-found_flag = false;
-p_data = [];
+valid_p_structs = {};
+valid_paths = {};
 
 % Iterate through all matching file system items
 for i = 1:length(listing)
@@ -127,11 +127,10 @@ for i = 1:length(listing)
             if isfield(p_candidate, 'init') && isfield(p_candidate.init, 'pcName') && ...
                strcmp(string(p_candidate.init.pcName(1:end-1)), job.experiment_pc_name)
 
-                p_data = p_candidate;
-                found_flag = true;
+                valid_p_structs{end+1} = p_candidate;
+                valid_paths{end+1} = matFilePath;
                 close(findobj('Type', 'Figure'));
                 fprintf('  --> Found and validated matching PLDAPS data.\n');
-                break; % Exit loop once found
             else
                 fprintf('  --> PC name does not match. Skipping.\n');
             end
@@ -142,9 +141,113 @@ for i = 1:length(listing)
 end
 
 % Final error handling after checking all candidates
-if ~found_flag
+if isempty(valid_p_structs)
     fprintf('ERROR: No matching PLDAPS data (file or directory) found for date %s and PC %s.\n', job.date, job.experiment_pc_name);
     return;
+end
+
+%% 3.5 Sort and Merge Multiple PLDAPS files
+
+% If multiple PLDAPS files were found, sort them chronologically and merge
+if numel(valid_p_structs) > 1
+    fprintf('Multiple PLDAPS files found. Sorting chronologically before merging...\n');
+
+    % Extract timestamps from filenames (e.g., from '_tHHMM_')
+    timestamps = nan(1, numel(valid_paths));
+    for i = 1:numel(valid_paths)
+        [~, filename, ~] = fileparts(valid_paths{i});
+        token = regexp(filename, '_t(\d{4,6})', 'tokens', 'once');
+        if ~isempty(token)
+            timestamps(i) = str2double(token{1});
+        else
+            fprintf('  Warning: Could not find _tHHMM_ timestamp in "%s". Using file modification date as a fallback.\n', filename);
+            fileInfo = dir(valid_paths{i});
+            if ~isempty(fileInfo)
+                timestamps(i) = fileInfo.datenum;
+            end
+        end
+    end
+
+    % Get the sort order and re-order the structs and paths
+    if ~all(isnan(timestamps))
+        [~, sort_idx] = sort(timestamps);
+        valid_p_structs = valid_p_structs(sort_idx);
+        valid_paths = valid_paths(sort_idx);
+        fprintf('  Files sorted. Merging...\n');
+    else
+        fprintf('  Warning: Could not determine chronological order. Merging in default order.\n');
+    end
+
+    % B. Discover All Field Names
+    all_trVars_fields = {};
+    all_trData_fields = {};
+    total_trials = 0;
+    for i = 1:numel(valid_p_structs)
+        s = valid_p_structs{i};
+        if isfield(s, 'trVars') && ~isempty(s.trVars)
+            all_trVars_fields = union(all_trVars_fields, fieldnames(s.trVars));
+            total_trials = total_trials + numel(s.trVars);
+        end
+        if isfield(s, 'trData') && ~isempty(s.trData)
+            all_trData_fields = union(all_trData_fields, fieldnames(s.trData));
+        end
+    end
+
+    % C. Pre-allocate and Merge
+    p_data.init = valid_p_structs{1}.init;
+
+    % Create empty struct arrays with all fields for trVars
+    args_vars = reshape([all_trVars_fields; cell(1, numel(all_trVars_fields))], 1, []);
+    if ~isempty(args_vars)
+        p_data.trVars = repmat(struct(args_vars{:}), total_trials, 1);
+    else
+        p_data.trVars = [];
+    end
+
+    % Create empty struct arrays with all fields for trData
+    args_data = reshape([all_trData_fields; cell(1, numel(all_trData_fields))], 1, []);
+    if ~isempty(args_data)
+        p_data.trData = repmat(struct(args_data{:}), total_trials, 1);
+    else
+        p_data.trData = [];
+    end
+
+    % Loop through your sorted valid_p_structs and copy data
+    trial_offset = 0;
+    for i = 1:numel(valid_p_structs)
+        s = valid_p_structs{i};
+        if ~isfield(s, 'trVars') || isempty(s.trVars)
+            continue; % Skip structs with no trials
+        end
+        num_trials_in_struct = numel(s.trVars);
+
+        for j = 1:num_trials_in_struct
+            current_trial_idx = trial_offset + j;
+
+            % Copy trVars
+            for f = 1:numel(all_trVars_fields)
+                field = all_trVars_fields{f};
+                if isfield(s.trVars, field)
+                    p_data.trVars(current_trial_idx).(field) = s.trVars(j).(field);
+                end
+            end
+
+            % Copy trData
+            if isfield(s, 'trData') && ~isempty(s.trData)
+                for f = 1:numel(all_trData_fields)
+                    field = all_trData_fields{f};
+                    if isfield(s.trData, field)
+                        p_data.trData(current_trial_idx).(field) = s.trData(j).(field);
+                    end
+                end
+            end
+        end
+        trial_offset = trial_offset + num_trials_in_struct;
+    end
+    fprintf('  %d files merged into a single data structure with %d total trials.\n', numel(valid_p_structs), total_trials);
+else
+    % If only one file was found, just extract it from the cell array
+    p_data = valid_p_structs{1};
 end
 
 %% 4. Match Trials and Integrate Data
