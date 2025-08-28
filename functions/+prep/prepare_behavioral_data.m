@@ -154,19 +154,66 @@ end
 nMatchedTrials = min(nNevTrials, nPdsTrials - pdsTrialOffset);
 fprintf('Integrating data for %d matched trials.\n', nMatchedTrials);
 
-% Pre-allocate all potential pds-derived timing fields in eventTimes
-% This ensures all arrays are the same size, even if some events don't
-% occur in a given session. This list is a superset of fields found
-% across all the data dictionaries.
-timingFieldsToPreallocate = {
-    'pdsFixOn', 'pdsFixAq', 'pdsFixOff', 'pdsTargetOn', 'pdsTargetOff', ...
-    'pdsTargetReillum', 'pdsTargetAq', 'pdsSaccadeOnset', 'pdsSaccadeOffset', ...
-    'pdsBrokeFix', 'pdsReward', 'pdsTone', 'pdsJoyPress', 'pdsJoyRelease', ...
-    'pdsStimOn', 'pdsStimOff', 'pdsCueOn', 'pdsCueOff', 'pdsStimChg', ...
-    'pdsBrokeJoy', 'pdsOutcomeOn'
-    };
-for f = 1:numel(timingFieldsToPreallocate)
-    eventTimes.(timingFieldsToPreallocate{f}) = nan(nNevTrials, 1);
+% Dynamically discover all unique timing fields from p.trData.timing
+allTimingFields = {};
+if isfield(p_data.trData, 'timing')
+    for i = 1:nPdsTrials
+        if isstruct(p_data.trData(i).timing)
+            allTimingFields = union(allTimingFields, fieldnames(p_data.trData(i).timing));
+        end
+    end
+end
+
+% Pre-allocate dynamically discovered fields in eventTimes
+fprintf('  Pre-allocating %d dynamically discovered timing fields...\n', numel(allTimingFields));
+for f = 1:numel(allTimingFields)
+    fieldName = allTimingFields{f};
+    pdsFieldName = ['pds' upper(fieldName(1)) fieldName(2:end)];
+    eventTimes.(pdsFieldName) = nan(nNevTrials, 1);
+end
+
+
+% --- Dynamic pre-allocation for trialInfo table from p.trVars and p.trData ---
+existingTrialInfoFields = trialInfo.Properties.VariableNames;
+firstValidPdsTrial = 1 + pdsTrialOffset;
+
+% Keep track of fields to populate to avoid re-checking conditions in the loop
+trVarsFieldsToCopy = {};
+if pdsTrialOffset > -1 && nPdsTrials >= firstValidPdsTrial
+    allTrVarsFields = fieldnames(p_data.trVars(firstValidPdsTrial));
+    fprintf('  Pre-allocating fields from p.trVars...\n');
+    for f = 1:numel(allTrVarsFields)
+        fieldName = allTrVarsFields{f};
+        if ~ismember(fieldName, existingTrialInfoFields)
+            trVarsFieldsToCopy{end+1} = fieldName; % Add to copy list
+            sampleData = p_data.trVars(firstValidPdsTrial).(fieldName);
+            if isnumeric(sampleData) || islogical(sampleData)
+                trialInfo.(fieldName) = nan(nNevTrials, numel(sampleData));
+            else
+                trialInfo.(fieldName) = cell(nNevTrials, 1);
+            end
+        end
+    end
+end
+
+trDataFieldsToCopy = {};
+if pdsTrialOffset > -1 && nPdsTrials >= firstValidPdsTrial
+    allTrDataFields = fieldnames(p_data.trData(firstValidPdsTrial));
+    fprintf('  Pre-allocating non-structural fields from p.trData...\n');
+    for f = 1:numel(allTrDataFields)
+        fieldName = allTrDataFields{f};
+        if ~ismember(fieldName, existingTrialInfoFields) && ~strcmp(fieldName, 'timing')
+            sampleData = p_data.trData(firstValidPdsTrial).(fieldName);
+            if ~isstruct(sampleData)
+                trDataFieldsToCopy{end+1} = fieldName; % Add to copy list
+                if isnumeric(sampleData) || islogical(sampleData)
+                    trialInfo.(fieldName) = nan(nNevTrials, numel(sampleData));
+                else
+                    trialInfo.(fieldName) = cell(nNevTrials, 1);
+                end
+            end
+        end
+    end
 end
 
 
@@ -175,21 +222,38 @@ for i = 1:nMatchedTrials
     nevIdx = i;
     pdsIdx = i + pdsTrialOffset;
 
-    % Explicitly map trial variables from p.trVars
-    trialInfo.isVisSac(nevIdx,1) = p_data.trVars(pdsIdx).isVisSac;
-    trialInfo.targetDegX(nevIdx,1) = p_data.trVars(pdsIdx).targDegX;
-    trialInfo.targetDegY(nevIdx,1) = p_data.trVars(pdsIdx).targDegY;
-    trialInfo.rewardDurationMs(nevIdx,1) = p_data.trVars(pdsIdx).rewardDurationMs;
-    % Add more mappings here as needed for analysis
+    % Dynamically copy data for fields discovered from p.trVars
+    for f = 1:numel(trVarsFieldsToCopy)
+        fieldName = trVarsFieldsToCopy{f};
+        if isfield(p_data.trVars(pdsIdx), fieldName)
+            dataValue = p_data.trVars(pdsIdx).(fieldName);
+            if iscell(trialInfo.(fieldName))
+                trialInfo.(fieldName){nevIdx} = dataValue;
+            else
+                if isempty(dataValue)
+                    trialInfo.(fieldName)(nevIdx, :) = nan(1, size(trialInfo.(fieldName), 2));
+                else
+                    trialInfo.(fieldName)(nevIdx, :) = dataValue(:)'; % Ensure row vector
+                end
+            end
+        end
+    end
 
-    % Map trial outcomes from p.trData
-    trialInfo.trialEndState(nevIdx,1) = p_data.trData(pdsIdx).trialEndState;
-
-    % Safely map trialRepeatFlag, as it may not always be present
-    if isfield(p_data.trData, 'trialRepeatFlag')
-        trialInfo.trialRepeatFlag(nevIdx,1) = p_data.trData(pdsIdx).trialRepeatFlag;
-    else
-        trialInfo.trialRepeatFlag(nevIdx,1) = NaN; % Or a suitable default
+    % Dynamically copy data for fields discovered from p.trData
+    for f = 1:numel(trDataFieldsToCopy)
+        fieldName = trDataFieldsToCopy{f};
+        if isfield(p_data.trData(pdsIdx), fieldName)
+            dataValue = p_data.trData(pdsIdx).(fieldName);
+            if iscell(trialInfo.(fieldName))
+                trialInfo.(fieldName){nevIdx} = dataValue;
+            else
+                if isempty(dataValue)
+                    trialInfo.(fieldName)(nevIdx, :) = nan(1, size(trialInfo.(fieldName), 2));
+                else
+                    trialInfo.(fieldName)(nevIdx, :) = dataValue(:)'; % Ensure row vector
+                end
+            end
+        end
     end
 
     % Map detailed event timestamps from p.trData.timing
