@@ -229,7 +229,9 @@ if numel(valid_p_structs) > 1
     p_data.init = valid_p_structs{1}.init;
 
     % Create empty struct arrays with all fields for trVars
-    args_vars = reshape([all_trVars_fields; cell(numel(all_trVars_fields), 1)], 1, []);
+    all_trVars_fields = all_trVars_fields(:)'; % Ensure it's a row vector
+    args_vars = [all_trVars_fields; cell(1, numel(all_trVars_fields))];
+    args_vars = args_vars(:)';
     if ~isempty(args_vars)
         p_data.trVars = repmat(struct(args_vars{:}), total_trials, 1);
     else
@@ -237,7 +239,9 @@ if numel(valid_p_structs) > 1
     end
 
     % Create empty struct arrays with all fields for trData
-    args_data = reshape([all_trData_fields; cell(1, numel(all_trData_fields))], 1, []);
+    all_trData_fields = all_trData_fields(:)'; % Ensure it's a row vector
+    args_data = [all_trData_fields; cell(1, numel(all_trData_fields))];
+    args_data = args_data(:)';
     if ~isempty(args_data)
         p_data.trData = repmat(struct(args_data{:}), total_trials, 1);
     else
