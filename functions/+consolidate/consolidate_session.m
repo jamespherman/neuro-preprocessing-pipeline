@@ -13,7 +13,8 @@ function success = consolidate_session(job, config)
     try
         jobDataDir = fullfile(config.processedDataDir, job.unique_id);
         kilosortDir = jobDataDir;
-        behavioralDataPath = fullfile(jobDataDir, [job.unique_id '_intermediate_data.mat']);
+        behavioralDataPath = jobDataDir + string(filesep) + ...
+            job.unique_id + "_intermediate_data.mat";
         outputDir = jobDataDir;
 
         % Load intermediate behavioral data
