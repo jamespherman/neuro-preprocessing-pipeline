@@ -19,5 +19,6 @@ function config = pipeline_config()
 
     % Other Parameters
     config.samplingRate = 30000; % Sampling rate in Hz
-
+    config.n_channels_in_dat = 32; % Number of channels in the .dat file
+    config.waveform_window_size = [-40, 41]; % Window size for waveform extraction
 end
