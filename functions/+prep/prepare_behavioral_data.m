@@ -125,7 +125,7 @@ for i = 1:length(listing)
 
     if ~isempty(matFilePath)
         fprintf('  Loading candidate file: %s\n', matFilePath);
-        warningState = warning('off', 'MATLAB:load:cannotInstantiateFunctionHandle');
+        warningState = warning('off', 'MATLAB:dispatcher:UnresolvedFunctionHandle');
         try
             matObj = matfile(matFilePath);
             varInfo = whos(matObj);
@@ -229,7 +229,7 @@ if numel(valid_p_structs) > 1
     p_data.init = valid_p_structs{1}.init;
 
     % Create empty struct arrays with all fields for trVars
-    args_vars = reshape([all_trVars_fields; cell(1, numel(all_trVars_fields))], 1, []);
+    args_vars = reshape([all_trVars_fields; cell(numel(all_trVars_fields), 1)], 1, []);
     if ~isempty(args_vars)
         p_data.trVars = repmat(struct(args_vars{:}), total_trials, 1);
     else
