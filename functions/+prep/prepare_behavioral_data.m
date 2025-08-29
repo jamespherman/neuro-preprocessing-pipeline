@@ -61,6 +61,26 @@ searchPattern = string(config.behavioralDataDir) + string(filesep) + ...
     "*" + formattedDate + "*";
 listing = dir(searchPattern);
 
+% --- Pre-filtering logic to remove redundant directories ---
+% Extract all names and identify which are directories
+all_names = {listing.name};
+is_dir = [listing.isdir];
+dir_names = all_names(is_dir);
+
+% Find directories that have a corresponding .mat file
+[~, dir_basenames, ~] = cellfun(@fileparts, dir_names, 'UniformOutput', false);
+mat_files_exist = ismember(dir_basenames, strrep(all_names, '.mat', ''));
+
+% Identify indices of directories to be removed
+dirs_to_remove_indices = find(is_dir & ismember(all_names, dir_names(mat_files_exist)));
+
+% Filter the original listing struct
+if ~isempty(dirs_to_remove_indices)
+    fprintf('Found %d redundant director(y/ies), removing from processing list...\n', numel(dirs_to_remove_indices));
+    listing(dirs_to_remove_indices) = [];
+end
+% --- End of pre-filtering logic ---
+
 valid_p_structs = {};
 valid_paths = {};
 
