@@ -74,11 +74,6 @@ function success = consolidate_session(job, config)
             spikes_in_cluster = session_data.spikes.times(session_data.spikes.clusters == cluster_id);
             nSpikes = length(spikes_in_cluster);
 
-            % To avoid long compute times, randomly subsample up to 500 spikes
-            if nSpikes > 500
-                spikes_in_cluster = spikes_in_cluster(randperm(nSpikes, 500));
-                nSpikes = 500;
-            end
 
             waveforms = zeros(config.n_channels_in_dat, waveform_length, nSpikes);
 
