@@ -47,7 +47,7 @@ function success = consolidate_session(job, config)
         fprintf('Extracting mean waveforms for %s...\n', job.unique_id);
 
         % Path to high-pass filtered data
-        datFilePath = fullfile(kilosortDir, [job.unique_id, '.dat']);
+        datFilePath = fullfile(kilosortDir, job.unique_id + ".dat");
         if ~exist(datFilePath, 'file')
             error('consolidate:consolidate_session:datNotFound', ...
                   '.dat file not found: %s', datFilePath);
