@@ -115,7 +115,7 @@ function success = consolidate_session(job, config)
         % --- End Mean Waveform Extraction ---
 
         % Save the final merged data
-        outputFilePath = fullfile(outputDir, [job.unique_id '_session_data.mat']);
+        outputFilePath = fullfile(outputDir, job.unique_id + "_session_data.mat");
         save(outputFilePath, 'session_data');
 
         fprintf('Successfully consolidated data for session %s\n', job.unique_id);
