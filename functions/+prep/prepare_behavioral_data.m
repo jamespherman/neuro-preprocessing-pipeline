@@ -369,7 +369,7 @@ end
 
 
 % --- Dynamic pre-allocation for trialInfo table from p.trVars and p.trData ---
-existingTrialInfoFields = trialInfo.Properties.VariableNames;
+existingTrialInfoFields = fieldnames(trialInfo);
 
 % Find the first PDS trial that has a corresponding NEV trial
 firstValidPdsIdx = find(~isnan(nev_to_pds_map), 1);
