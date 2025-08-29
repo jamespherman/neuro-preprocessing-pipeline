@@ -331,10 +331,38 @@ if isfield(p_data.trData, 'timing')
     end
 end
 
+% --- Data-Driven Filtering of Timing Fields ---
+scalarTimingFields = {};
+fprintf('  Found %d candidate timing fields. Filtering for scalar values...\n', numel(allTimingFields));
+
+for i = 1:numel(allTimingFields)
+    fieldName = allTimingFields{i};
+
+    % Find the first trial that contains this timing field
+    first_occurrence_trial = -1;
+    for j = 1:nPdsTrials
+        if isfield(p_data.trData(j), 'timing') && isfield(p_data.trData(j).timing, fieldName)
+            first_occurrence_trial = j;
+            break;
+        end
+    end
+
+    % If the field was found, check if its value is scalar in that trial
+    if first_occurrence_trial > 0
+        fieldValue = p_data.trData(first_occurrence_trial).timing.(fieldName);
+        if numel(fieldValue) == 1
+            scalarTimingFields{end+1} = fieldName;
+        else
+            fprintf('  --> Filtering out non-scalar timing field: %s (size: %s)\n', ...
+                    fieldName, mat2str(size(fieldValue)));
+        end
+    end
+end
+
 % Pre-allocate dynamically discovered fields in eventTimes
-fprintf('  Pre-allocating %d dynamically discovered timing fields...\n', numel(allTimingFields));
-for f = 1:numel(allTimingFields)
-    fieldName = allTimingFields{f};
+fprintf('  Pre-allocating %d dynamically discovered timing fields...\n', numel(scalarTimingFields));
+for f = 1:numel(scalarTimingFields)
+    fieldName = scalarTimingFields{f};
     pdsFieldName = ['pds' upper(fieldName(1)) fieldName(2:end)];
     eventTimes.(pdsFieldName) = nan(nNevTrials, 1);
 end
