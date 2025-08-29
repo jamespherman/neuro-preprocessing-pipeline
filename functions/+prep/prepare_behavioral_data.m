@@ -368,52 +368,123 @@ for f = 1:numel(scalarTimingFields)
 end
 
 
-% --- Dynamic pre-allocation for trialInfo table from p.trVars and p.trData ---
-existingTrialInfoFields = fieldnames(trialInfo);
+% --- Analyze PLDAPS fields for consistent sizing and pre-allocate trialInfo ---
+fprintf('Analyzing PLDAPS fields and pre-allocating trialInfo table...\n');
 
-% Find the first PDS trial that has a corresponding NEV trial
-firstValidPdsIdx = find(~isnan(nev_to_pds_map), 1);
-if ~isempty(firstValidPdsIdx)
-    firstValidPdsTrial = nev_to_pds_map(firstValidPdsIdx);
-else
-    firstValidPdsTrial = []; % Handle case with no matches
-end
-
-% Keep track of fields to populate to avoid re-checking conditions in the loop
+% --- Analysis and Pre-allocation for trVars ---
 trVarsFieldsToCopy = {};
-if ~isempty(firstValidPdsTrial)
-    allTrVarsFields = fieldnames(p_data.trVars(firstValidPdsTrial));
-    fprintf('  Pre-allocating fields from p.trVars...\n');
+if isfield(p_data, 'trVars') && ~isempty(p_data.trVars)
+    allTrVarsFields = {};
+    % Discover all unique fields from all trials first
+    for i = 1:numel(p_data.trVars)
+        allTrVarsFields = union(allTrVarsFields, fieldnames(p_data.trVars(i)));
+    end
+
+    % Analyze each field and pre-allocate
+    existingTrialInfoFields = fieldnames(trialInfo);
     for f = 1:numel(allTrVarsFields)
         fieldName = allTrVarsFields{f};
-        if ~ismember(fieldName, existingTrialInfoFields)
-            trVarsFieldsToCopy{end+1} = fieldName; % Add to copy list
-            sampleData = p_data.trVars(firstValidPdsTrial).(fieldName);
-            if isnumeric(sampleData) || islogical(sampleData)
-                trialInfo.(fieldName) = nan(nNevTrials, numel(sampleData));
-            else
-                trialInfo.(fieldName) = cell(nNevTrials, 1);
+        if ismember(fieldName, existingTrialInfoFields)
+            continue;
+        end
+
+        first_size = [];
+        is_consistent = true;
+        is_numeric = false;
+        is_struct = false;
+
+        % Find first instance to get base properties
+        first_val_idx = -1;
+        for i = 1:numel(p_data.trVars)
+            if isfield(p_data.trVars(i), fieldName)
+                val = p_data.trVars(i).(fieldName);
+                first_size = size(val);
+                is_numeric = isnumeric(val) || islogical(val);
+                is_struct = isstruct(val);
+                first_val_idx = i;
+                break;
             end
+        end
+
+        if is_struct || first_val_idx == -1
+            continue; % Skip structs and fields that were not found
+        end
+
+        % Compare with the rest of the trials for size consistency
+        for i = (first_val_idx + 1):numel(p_data.trVars)
+            if isfield(p_data.trVars(i), fieldName)
+                if ~isequal(size(p_data.trVars(i).(fieldName)), first_size)
+                    is_consistent = false;
+                    fprintf('  --> Detected variable size for trVars field: %s\n', fieldName);
+                    break;
+                end
+            end
+        end
+
+        trVarsFieldsToCopy{end+1} = fieldName;
+        if is_consistent && is_numeric
+            trialInfo.(fieldName) = nan(nNevTrials, prod(first_size));
+        else
+            trialInfo.(fieldName) = cell(nNevTrials, 1);
         end
     end
 end
 
+% --- Analysis and Pre-allocation for trData ---
 trDataFieldsToCopy = {};
-if ~isempty(firstValidPdsTrial)
-    allTrDataFields = fieldnames(p_data.trData(firstValidPdsTrial));
-    fprintf('  Pre-allocating non-structural fields from p.trData...\n');
+if isfield(p_data, 'trData') && ~isempty(p_data.trData)
+    allTrDataFields = {};
+    % Discover all unique fields from all trials first
+    for i = 1:numel(p_data.trData)
+        allTrDataFields = union(allTrDataFields, fieldnames(p_data.trData(i)));
+    end
+
+    % Analyze each field and pre-allocate
+    existingTrialInfoFields = fieldnames(trialInfo); % Update with fields from trVars
     for f = 1:numel(allTrDataFields)
         fieldName = allTrDataFields{f};
-        if ~ismember(fieldName, existingTrialInfoFields) && ~strcmp(fieldName, 'timing')
-            sampleData = p_data.trData(firstValidPdsTrial).(fieldName);
-            if ~isstruct(sampleData)
-                trDataFieldsToCopy{end+1} = fieldName; % Add to copy list
-                if isnumeric(sampleData) || islogical(sampleData)
-                    trialInfo.(fieldName) = nan(nNevTrials, numel(sampleData));
-                else
-                    trialInfo.(fieldName) = cell(nNevTrials, 1);
+        if ismember(fieldName, existingTrialInfoFields) || strcmp(fieldName, 'timing')
+            continue;
+        end
+
+        first_size = [];
+        is_consistent = true;
+        is_numeric = false;
+        is_struct = false;
+
+        % Find first instance to get base properties
+        first_val_idx = -1;
+        for i = 1:numel(p_data.trData)
+            if isfield(p_data.trData(i), fieldName)
+                val = p_data.trData(i).(fieldName);
+                first_size = size(val);
+                is_numeric = isnumeric(val) || islogical(val);
+                is_struct = isstruct(val);
+                first_val_idx = i;
+                break;
+            end
+        end
+
+        if is_struct || first_val_idx == -1
+            continue; % Skip structs
+        end
+
+        % Compare with the rest of the trials
+        for i = (first_val_idx + 1):numel(p_data.trData)
+            if isfield(p_data.trData(i), fieldName)
+                if ~isequal(size(p_data.trData(i).(fieldName)), first_size)
+                    is_consistent = false;
+                    fprintf('  --> Detected variable size for trData field: %s\n', fieldName);
+                    break;
                 end
             end
+        end
+
+        trDataFieldsToCopy{end+1} = fieldName;
+        if is_consistent && is_numeric
+            trialInfo.(fieldName) = nan(nNevTrials, prod(first_size));
+        else
+            trialInfo.(fieldName) = cell(nNevTrials, 1);
         end
     end
 end
@@ -427,53 +498,53 @@ for nevIdx = 1:nNevTrials
     if ~isnan(pdsIdx)
         % Dynamically copy data for fields discovered from p.trVars
         for f = 1:numel(trVarsFieldsToCopy)
-        fieldName = trVarsFieldsToCopy{f};
-        if isfield(p_data.trVars(pdsIdx), fieldName)
-            dataValue = p_data.trVars(pdsIdx).(fieldName);
-            if iscell(trialInfo.(fieldName))
-                trialInfo.(fieldName){nevIdx} = dataValue;
-            else
-                if isempty(dataValue)
-                    trialInfo.(fieldName)(nevIdx, :) = nan(1, size(trialInfo.(fieldName), 2));
+            fieldName = trVarsFieldsToCopy{f};
+            if isfield(p_data.trVars(pdsIdx), fieldName)
+                dataValue = p_data.trVars(pdsIdx).(fieldName);
+                if iscell(trialInfo.(fieldName))
+                    trialInfo.(fieldName){nevIdx} = dataValue;
                 else
-                    trialInfo.(fieldName)(nevIdx, :) = dataValue(:)'; % Ensure row vector
+                    if isempty(dataValue)
+                        trialInfo.(fieldName)(nevIdx, :) = nan(1, size(trialInfo.(fieldName), 2));
+                    else
+                        trialInfo.(fieldName)(nevIdx, :) = dataValue(:)'; % Ensure row vector
+                    end
                 end
             end
         end
-    end
 
-    % Dynamically copy data for fields discovered from p.trData
-    for f = 1:numel(trDataFieldsToCopy)
-        fieldName = trDataFieldsToCopy{f};
-        if isfield(p_data.trData(pdsIdx), fieldName)
-            dataValue = p_data.trData(pdsIdx).(fieldName);
-            if iscell(trialInfo.(fieldName))
-                trialInfo.(fieldName){nevIdx} = dataValue;
-            else
-                if isempty(dataValue)
-                    trialInfo.(fieldName)(nevIdx, :) = nan(1, size(trialInfo.(fieldName), 2));
+        % Dynamically copy data for fields discovered from p.trData
+        for f = 1:numel(trDataFieldsToCopy)
+            fieldName = trDataFieldsToCopy{f};
+            if isfield(p_data.trData(pdsIdx), fieldName)
+                dataValue = p_data.trData(pdsIdx).(fieldName);
+                if iscell(trialInfo.(fieldName))
+                    trialInfo.(fieldName){nevIdx} = dataValue;
                 else
-                    trialInfo.(fieldName)(nevIdx, :) = dataValue(:)'; % Ensure row vector
+                    if isempty(dataValue)
+                        trialInfo.(fieldName)(nevIdx, :) = nan(1, size(trialInfo.(fieldName), 2));
+                    else
+                        trialInfo.(fieldName)(nevIdx, :) = dataValue(:)'; % Ensure row vector
+                    end
                 end
             end
         end
-    end
 
-    % Map detailed event timestamps from p.trData.timing
-    if isfield(p_data.trData(pdsIdx), 'timing') && ...
-            isstruct(p_data.trData(pdsIdx).timing)
+        % Map detailed event timestamps from p.trData.timing
+        if isfield(p_data.trData(pdsIdx), 'timing') && ...
+                isstruct(p_data.trData(pdsIdx).timing)
 
-        timingData = p_data.trData(pdsIdx).timing;
-        timingFields = fieldnames(timingData);
+            timingData = p_data.trData(pdsIdx).timing;
+            timingFields = fieldnames(timingData);
 
-        for t = 1:numel(timingFields)
-            pdsFieldName = ['pds' upper(timingFields{t}(1)) timingFields{t}(2:end)];
-            % Ensure the field was pre-allocated to avoid typos causing errors
-            if isfield(eventTimes, pdsFieldName)
-                eventTimes.(pdsFieldName)(nevIdx) = timingData.(timingFields{t});
+            for t = 1:numel(timingFields)
+                pdsFieldName = ['pds' upper(timingFields{t}(1)) timingFields{t}(2:end)];
+                % Ensure the field was pre-allocated to avoid typos causing errors
+                if isfield(eventTimes, pdsFieldName)
+                    eventTimes.(pdsFieldName)(nevIdx) = timingData.(timingFields{t});
+                end
             end
         end
-    end
     end
 end
 
