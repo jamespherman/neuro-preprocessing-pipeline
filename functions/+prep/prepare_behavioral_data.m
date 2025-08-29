@@ -105,6 +105,7 @@ for i = 1:length(listing)
 
     if ~isempty(matFilePath)
         fprintf('  Loading candidate file: %s\n', matFilePath);
+        warningState = warning('off', 'MATLAB:load:cannotInstantiateFunctionHandle');
         try
             matObj = matfile(matFilePath);
             varInfo = whos(matObj);
@@ -135,8 +136,12 @@ for i = 1:length(listing)
                 fprintf('  --> PC name does not match. Skipping.\n');
             end
         catch ME
+            % Restore warning state in case of an error
+            warning(warningState);
             fprintf(2, '  Error loading or checking file %s: %s\n', matFilePath, ME.message);
         end
+        % Restore the original warning state after successful loading
+        warning(warningState);
     end
 end
 
@@ -145,6 +150,13 @@ if isempty(valid_p_structs)
     fprintf('ERROR: No matching PLDAPS data (file or directory) found for date %s and PC %s.\n', job.date, job.experiment_pc_name);
     return;
 end
+
+fprintf('Found %d candidate PLDAPS files. Removing duplicates...\n', numel(valid_paths));
+[~, unique_indices] = unique(valid_paths);
+
+valid_paths = valid_paths(unique_indices);
+valid_p_structs = valid_p_structs(unique_indices);
+fprintf('Found %d unique PLDAPS files.\n', numel(valid_paths));
 
 %% 3.5 Sort and Merge Multiple PLDAPS files
 
