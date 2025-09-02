@@ -99,7 +99,7 @@ for i = 1:length(listing)
     if item.isdir
         % It's a directory, first check for the number of .mat files
         matFilesInDir = dir(fullfile(itemPath, '*.mat'));
-        if numel(matFilesInDir) < 25
+        if numel(matFilesInDir) < 5
             fprintf('  --> Skipping directory, contains fewer than 25 trials.\n');
             continue;
         end
