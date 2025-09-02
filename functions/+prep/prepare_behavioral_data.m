@@ -167,6 +167,7 @@ end
 
 % Final error handling after checking all candidates
 if isempty(valid_p_structs)
+    keyboard
     fprintf('ERROR: No matching PLDAPS data (file or directory) found for date %s and PC %s.\n', job.date, job.experiment_pc_name);
     return;
 end
