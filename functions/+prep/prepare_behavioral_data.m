@@ -68,15 +68,20 @@ is_dir = [listing.isdir];
 dir_names = all_names(is_dir);
 
 % Find directories that have a corresponding .mat file
-[~, dir_basenames, ~] = cellfun(@fileparts, dir_names, 'UniformOutput', false);
-mat_files_exist = ismember(dir_basenames, strrep(all_names, '.mat', ''));
+[~, dir_basenames, ~] = cellfun(@fileparts, dir_names, ...
+    'UniformOutput', false);
+mat_files_exist = ismember(cellfun(@(x)[x '.mat'], dir_basenames', ...
+    'UniformOutput', false), all_names);
 
 % Identify indices of directories to be removed
-dirs_to_remove_indices = find(is_dir & ismember(all_names, dir_names(mat_files_exist)));
+dirs_to_remove_indices = find(is_dir & ismember(all_names, ...
+    dir_names(mat_files_exist)));
 
 % Filter the original listing struct
 if ~isempty(dirs_to_remove_indices)
-    fprintf('Found %d redundant director(y/ies), removing from processing list...\n', numel(dirs_to_remove_indices));
+    fprintf(['Found %d redundant director(y/ies), ...' ...
+        'removing from processing list...\n'], ...
+        numel(dirs_to_remove_indices));
     listing(dirs_to_remove_indices) = [];
 end
 % --- End of pre-filtering logic ---
@@ -318,6 +323,7 @@ nMatchedTrials = sum(~isnan(nev_to_pds_map));
 fprintf('Found %d matched trials between NEV and PLDAPS data.\n', nMatchedTrials);
 
 if nMatchedTrials == 0
+    keyboard
     fprintf('ERROR: Could not align NEV and PLDAPS trial strobes.\n');
     return;
 end
