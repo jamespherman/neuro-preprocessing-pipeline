@@ -29,8 +29,13 @@ This stage bridges a manual sorting process with an automated check.
 *   **Manual Sorting**: The user runs Kilosort/Phy on the `.dat` file from the previous stage to sort spikes and perform manual curation.
 *   **Automated Status Check**: When `run_preprocessing.m` is run, it checks for the presence of Kilosort output files (e.g., `spike_times.npy`). If found, it automatically updates the job's `kilosort_status` to `complete`.
 
-### 3. Data Consolidation (Future Work)
-The final step of merging the spike data (from Kilosort) and the behavioral data (from the preparation step) into the final `session_data.mat` is planned but not yet implemented in `run_preprocessing.m`. The `consolidation_status` column is reserved for tracking this stage.
+### 3. Data Consolidation (Automated)
+The final step merges the spike data (from Kilosort) and the behavioral data (from the preparation step) into the final `session_data.mat`. When `run_preprocessing.m` is executed, it checks for any jobs where `dat_status`, `behavior_status`, and `kilosort_status` are all `complete`, but `consolidation_status` is `pending`.
+
+*   It loads the intermediate behavioral data and the Kilosort output.
+*   It calculates and saves the mean waveforms for each cluster.
+*   It saves the final, merged `session_data` struct to `[job.unique_id]_session_data.mat`.
+*   On success, it updates the job's `consolidation_status` to `complete`.
 
 ---
 
