@@ -14,6 +14,38 @@ The primary source of metadata for each session is the `config/session_manifest.
 
 To begin an analysis, you should always start by consulting the manifest to identify the sessions of interest and retrieve their associated metadata.
 
+## Locating Session Data Files
+
+All processed data, including the final `_session_data.mat` file, is stored in a structured directory within your OneDrive. The root for all processed data is a folder named `Neuronal Data Analysis`. Inside this folder, there is a separate directory for each session, named with the session's `unique_id`.
+
+The full path to a session's data folder is:
+`{Your_OneDrive_Path}/Neuronal Data Analysis/{unique_id}/`
+
+The pipeline includes a helper function, `utils.findOneDrive.m`, to get the root path of your OneDrive folder programmatically. You can combine this with a `unique_id` from the manifest to construct the full path to the data file you want to analyze.
+
+Example (in MATLAB):
+```matlab
+% 1. Choose a unique_id from the session_manifest.csv
+session_id = 'Feynman_08_12_2025_SNc';
+
+% 2. Get the root of your OneDrive directory
+oneDrivePath = utils.findOneDrive();
+
+% 3. Construct the path to the session's data folder
+sessionDataFolder = fullfile(oneDrivePath, 'Neuronal Data Analysis', session_id);
+
+% 4. Construct the full path to the session_data.mat file
+sessionDataFile = fullfile(sessionDataFolder, [session_id, '_session_data.mat']);
+
+% 5. Check if the file exists and load it
+if isfile(sessionDataFile)
+    fprintf('Loading data from: %s\n', sessionDataFile);
+    load(sessionDataFile);
+else
+    fprintf('Error: Could not find the data file at: %s\n', sessionDataFile);
+end
+```
+
 ## Pipeline Parameters: `config/pipeline_config.m`
 
 Global parameters that apply to the entire preprocessing pipeline are defined in the `config/pipeline_config.m` file. This includes key values such as:
