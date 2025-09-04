@@ -52,35 +52,45 @@ for i = 1:height(jobs)
     end
     
     try
-        % Load the file
+        % Load the session_data.mat file
         loaded_data = load(session_data_path);
         
-        % Check if the required fields exist
-        if isfield(loaded_data, 'session_data') && ...
-           isfield(loaded_data.session_data, 'spikes') && ...
-           isfield(loaded_data.session_data.spikes, 'times')
+        % Define the path for spikeTimes.npy in the same directory
+        [session_dir, ~, ~] = fileparts(session_data_path);
+        spike_times_npy_path = fullfile(session_dir, 'spikeTimes.npy');
+
+        % Check if spikeTimes.npy exists
+        if ~isfile(spike_times_npy_path)
+            fprintf('  -> spikeTimes.npy not found in %s. Skipping.\n', session_dir);
+            continue;
+        end
+
+        % Check if the required fields exist in the loaded .mat file
+        if isfield(loaded_data, 'session_data') && isfield(loaded_data.session_data, 'spikes')
+
+            % Load spike times from .npy file
+            fprintf('  -> Loading spike times from %s\n', spike_times_npy_path);
+            spike_times_samples = utils.readNPY(spike_times_npy_path);
             
-            % Check if conversion is needed (e.g., max time > reasonable session length in sec)
-            % This is a heuristic to avoid re-converting already converted files.
-            % A session is unlikely to be > 100,000 seconds (27 hours).
-            if max(loaded_data.session_data.spikes.times) < 100000
-                 fprintf('  -> Spike times appear to be in seconds already. Skipping conversion.\n');
-                 continue;
+            % Convert spike times to seconds (and ensure double precision)
+            fprintf('  -> Converting spike times to seconds...');
+            spike_times_seconds = double(spike_times_samples) / config.samplingRate;
+
+            % Ensure the 'times' field exists and is of type double before assigning
+            if ~isfield(loaded_data.session_data.spikes, 'times')
+                loaded_data.session_data.spikes.times = [];
             end
 
-            % Perform the conversion
-            fprintf('  -> Converting spike times...');
-            original_max_time = max(loaded_data.session_data.spikes.times);
-            loaded_data.session_data.spikes.times = loaded_data.session_data.spikes.times / config.samplingRate;
-            new_max_time = max(loaded_data.session_data.spikes.times);
+            % Assign the converted spike times
+            loaded_data.session_data.spikes.times = spike_times_seconds;
             
             % Save the modified data back to the same file
             save(session_data_path, '-struct', 'loaded_data');
             
-            fprintf(' Done. (e.g., max time changed from %.2f to %.2f)\n', original_max_time, new_max_time);
+            fprintf(' Done. Stored %d spike times as double.\n', numel(spike_times_seconds));
             conversion_count = conversion_count + 1;
         else
-            fprintf('  -> session_data.spikes.times field not found. Skipping.\n');
+            fprintf('  -> session_data.spikes field not found in %s. Skipping.\n', session_data_path);
         end
         
     catch ME
