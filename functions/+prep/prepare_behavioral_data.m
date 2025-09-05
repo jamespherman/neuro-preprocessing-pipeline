@@ -357,7 +357,7 @@ for i = 1:numel(allTimingFields)
     % If the field was found, check if its value is scalar in that trial
     if first_occurrence_trial > 0
         fieldValue = p_data.trData(first_occurrence_trial).timing.(fieldName);
-        if numel(fieldValue) == 1
+        if isscalar(fieldValue)
             scalarTimingFields{end+1} = fieldName;
         else
             fprintf('  --> Filtering out non-scalar timing field: %s (size: %s)\n', ...
