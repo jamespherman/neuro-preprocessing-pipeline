@@ -395,37 +395,46 @@ if isfield(p_data, 'trVars') && ~isempty(p_data.trVars)
             continue;
         end
 
-        first_size = [];
         is_consistent = true;
-        is_numeric = false;
+        is_numeric = true; % Start by assuming the best case
         is_struct = false;
+        first_size = [];
+        first_val_found = false;
 
-        % Find first instance to get base properties
-        first_val_idx = -1;
+        % Analyze all trials for a field to determine its properties
         for i = 1:numel(p_data.trVars)
             if isfield(p_data.trVars(i), fieldName)
                 val = p_data.trVars(i).(fieldName);
-                first_size = size(val);
-                is_numeric = isnumeric(val) || islogical(val);
-                is_struct = isstruct(val);
-                first_val_idx = i;
-                break;
-            end
-        end
 
-        if is_struct || first_val_idx == -1
-            continue; % Skip structs and fields that were not found
-        end
+                if isstruct(val)
+                    is_struct = true;
+                    break; % Structs are handled separately, exit
+                end
 
-        % Compare with the rest of the trials for size consistency
-        for i = (first_val_idx + 1):numel(p_data.trVars)
-            if isfield(p_data.trVars(i), fieldName)
-                if ~isequal(size(p_data.trVars(i).(fieldName)), first_size)
-                    is_consistent = false;
-                    fprintf('  --> Detected variable size for trVars field: %s\n', fieldName);
-                    break;
+                if ~isempty(val)
+                    % Check for type consistency
+                    if ~(isnumeric(val) || islogical(val))
+                        is_numeric = false;
+                        break; % Not numeric, so it must be a cell array
+                    end
+
+                    % If this is the first non-empty value, set it as the reference
+                    if ~first_val_found
+                        first_size = size(val);
+                        first_val_found = true;
+                    else
+                        % Compare subsequent non-empty values to the reference
+                        if ~isequal(size(val), first_size)
+                            is_consistent = false;
+                            break; % Inconsistent size, must be a cell array
+                        end
+                    end
                 end
             end
+        end
+
+        if is_struct
+            continue; % Skip struct fields
         end
 
         trVarsFieldsToCopy{end+1} = fieldName;
@@ -454,37 +463,46 @@ if isfield(p_data, 'trData') && ~isempty(p_data.trData)
             continue;
         end
 
-        first_size = [];
         is_consistent = true;
-        is_numeric = false;
+        is_numeric = true; % Start by assuming the best case
         is_struct = false;
+        first_size = [];
+        first_val_found = false;
 
-        % Find first instance to get base properties
-        first_val_idx = -1;
+        % Analyze all trials for a field to determine its properties
         for i = 1:numel(p_data.trData)
             if isfield(p_data.trData(i), fieldName)
                 val = p_data.trData(i).(fieldName);
-                first_size = size(val);
-                is_numeric = isnumeric(val) || islogical(val);
-                is_struct = isstruct(val);
-                first_val_idx = i;
-                break;
-            end
-        end
 
-        if is_struct || first_val_idx == -1
-            continue; % Skip structs
-        end
+                if isstruct(val)
+                    is_struct = true;
+                    break; % Structs are handled separately, exit
+                end
 
-        % Compare with the rest of the trials
-        for i = (first_val_idx + 1):numel(p_data.trData)
-            if isfield(p_data.trData(i), fieldName)
-                if ~isequal(size(p_data.trData(i).(fieldName)), first_size)
-                    is_consistent = false;
-                    fprintf('  --> Detected variable size for trData field: %s\n', fieldName);
-                    break;
+                if ~isempty(val)
+                    % Check for type consistency
+                    if ~(isnumeric(val) || islogical(val))
+                        is_numeric = false;
+                        break; % Not numeric, so it must be a cell array
+                    end
+
+                    % If this is the first non-empty value, set it as the reference
+                    if ~first_val_found
+                        first_size = size(val);
+                        first_val_found = true;
+                    else
+                        % Compare subsequent non-empty values to the reference
+                        if ~isequal(size(val), first_size)
+                            is_consistent = false;
+                            break; % Inconsistent size, must be a cell array
+                        end
+                    end
                 end
             end
+        end
+
+        if is_struct
+            continue; % Skip struct fields
         end
 
         trDataFieldsToCopy{end+1} = fieldName;
@@ -561,7 +579,7 @@ outputFilePath = fullfile(intermediateDir, outputFileName);
 
 fprintf('Saving intermediate data to: %s\n', outputFilePath);
 try
-    save(outputFilePath, 'trialInfo', 'eventTimes', '-v7.3');
+    save(outputFilePath, 'trialInfo', 'eventTimes', 'eventValuesTrials', '-v7.3');
     success = true;
     fprintf('Successfully created intermediate data file.\n');
 catch ME

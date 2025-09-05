@@ -10,6 +10,7 @@ The `session_data.mat` file contains a single top-level struct named `session_da
 |---|---|---|
 | `trialInfo` | `table` | A table containing trial-by-trial information, merging behavioral parameters from PLDAPS with trial events from the neural data. Each row corresponds to one trial. |
 | `eventTimes` | `struct` | A structure containing vectors of timestamps for key events in each trial. Each field corresponds to an event, and the vector length matches the number of trials. |
+| `eventValuesTrials` | `cell` | A cell array where each cell contains a vector of the raw digital event codes (strobes) from the `.nev` file for the corresponding trial. |
 | `spikes` | `struct` | A structure containing all spike-related data, including spike times, cluster assignments, and waveform information. |
 
 ---
@@ -17,6 +18,8 @@ The `session_data.mat` file contains a single top-level struct named `session_da
 ## `session_data.trialInfo`
 
 The `trialInfo` table is the primary source of behavioral data for each trial. The columns of this table are dynamically generated based on the specific PLDAPS task file used for the session. It includes a combination of data strobed to the neural recording system and parameters saved by the PLDAPS task code (`p.trVars` and `p.trData`).
+
+Fields that are consistently scalar and numeric (or boolean) across all trials are stored as numeric arrays. Any trial where the value was empty (`[]`) in the raw PLDAPS data is represented as `NaN` in these arrays. Fields with inconsistent sizes (e.g., arrays of different lengths in different trials) or non-numeric data types are stored as `cell` arrays.
 
 ### Standard Fields (from `.nev` file)
 
