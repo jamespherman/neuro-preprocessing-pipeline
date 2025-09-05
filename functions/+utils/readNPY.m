@@ -7,7 +7,7 @@ function data = readNPY(filename)
 % more.
 %
 
-[shape, dataType, fortranOrder, littleEndian, totalHeaderLength, ~] = readNPYheader(filename);
+[shape, dataType, fortranOrder, littleEndian, totalHeaderLength, ~] = utils.readNPYheader(filename);
 
 if littleEndian
     fid = fopen(filename, 'r', 'l');

@@ -1,4 +1,4 @@
-function convert_spike_times_to_seconds()
+function convert_spike_times()
 %CONVERT_SPIKE_TIMES_TO_SECONDS Converts spike times from samples to seconds.
 %
 %   This script iterates through all sessions defined in the project's
@@ -55,13 +55,13 @@ for i = 1:height(jobs)
         % Load the session_data.mat file
         loaded_data = load(session_data_path);
         
-        % Define the path for spikeTimes.npy in the same directory
+        % Define the path for spike_times.npy in the same directory
         [session_dir, ~, ~] = fileparts(session_data_path);
-        spike_times_npy_path = fullfile(session_dir, 'spikeTimes.npy');
+        spike_times_npy_path = fullfile(session_dir, 'spike_times.npy');
 
-        % Check if spikeTimes.npy exists
+        % Check if spike_times.npy exists
         if ~isfile(spike_times_npy_path)
-            fprintf('  -> spikeTimes.npy not found in %s. Skipping.\n', session_dir);
+            fprintf('  -> spike_times.npy not found in %s. Skipping.\n', session_dir);
             continue;
         end
 
@@ -94,6 +94,7 @@ for i = 1:height(jobs)
         end
         
     catch ME
+        keyboard
         fprintf(2, '  -> ERROR processing file %s: %s\n', session_data_path, ME.message);
     end
 end
