@@ -21,7 +21,7 @@ function success = consolidate_session(job, config)
         if ~exist(behavioralDataPath, 'file')
             error('Intermediate behavioral data file not found: %s', behavioralDataPath);
         end
-        load(behavioralDataPath, 'trialInfo', 'eventTimes');
+        load(behavioralDataPath, 'trialInfo', 'eventTimes', 'eventValuesTrials');
 
         % Load Kilosort output files
         spike_times_path = fullfile(kilosortDir, 'spike_times.npy');
@@ -39,6 +39,7 @@ function success = consolidate_session(job, config)
         % Merge data
         session_data.trialInfo = trialInfo;
         session_data.eventTimes = eventTimes;
+        session_data.eventValuesTrials = eventValuesTrials;
         session_data.spikes.times = spike_times;
         session_data.spikes.clusters = spike_clusters;
         session_data.spikes.cluster_info = cluster_info;
@@ -113,6 +114,12 @@ function success = consolidate_session(job, config)
 
         fprintf('Finished extracting waveforms for %s.\n', job.unique_id);
         % --- End Mean Waveform Extraction ---
+
+        % Convert spike times from samples to seconds. The raw spike_times are in
+        % samples, but the final data product requires them to be in seconds.
+        % We divide by the sampling rate (30000 Hz) to convert them.
+        fprintf('Converting spike times from samples to seconds...\n');
+        session_data.spikes.times = double(session_data.spikes.times) / 30000;
 
         % Save the final merged data
         outputFilePath = fullfile(outputDir, job.unique_id + "_session_data.mat");
