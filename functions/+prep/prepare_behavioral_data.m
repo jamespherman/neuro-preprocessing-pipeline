@@ -573,6 +573,89 @@ for nevIdx = 1:nNevTrials
     end
 end
 
+%% 4.5 Timestamp Correction for gSac_4factors
+% This section corrects for timestamp drift in the gSac_4factors task
+% by using data from other, more reliable tasks within the same session.
+
+% Initialize event code definitions
+codes = utils.initCodes;
+
+% Identify all gSac_4factors trials
+is_gsac_4factors_trial = trialInfo.taskCode == codes.uniqueTaskCode_gSac_4factors;
+
+% If gSac_4factors trials are present, proceed with correction
+if any(is_gsac_4factors_trial)
+    fprintf('Found gSac_4factors trials. Applying timestamp correction...\n');
+
+    % Identify "good" trials for building the model (i.e., non-gSac_4factors trials)
+    good_trial_indices = find(~is_gsac_4factors_trial & ~isnan(nev_to_pds_map));
+
+    if ~isempty(good_trial_indices)
+        % Initialize vectors for paired timestamps
+        pldaps_times = [];
+        ripple_times = [];
+
+        % Collect paired timestamps from good trials
+        for i = 1:length(good_trial_indices)
+            nevIdx = good_trial_indices(i);
+            pdsIdx = nev_to_pds_map(nevIdx);
+
+            if ~isnan(pdsIdx) && isfield(p_data.trData(pdsIdx), 'timing') && isfield(p_data.trData(pdsIdx).timing, 'trialStartPTB')
+                pldaps_times(end+1) = p_data.trData(pdsIdx).timing.trialStartPTB;
+                ripple_times(end+1) = eventTimes.trialBegin(nevIdx);
+            end
+        end
+
+        % Ensure we have enough points to build a model
+        if numel(pldaps_times) > 1
+            % Compute the linear mapping
+            mapping_params = polyfit(pldaps_times, ripple_times, 1);
+
+            % Verification of the fit
+            predicted_ripple_times = polyval(mapping_params, pldaps_times);
+            residuals = ripple_times - predicted_ripple_times;
+
+            if max(abs(residuals)) > 0.001 % 1 ms threshold
+                warning('Timestamp correction fit is poor for session %s. Max residual: %.4f s', job.unique_id, max(abs(residuals)));
+            end
+
+            % Generate a scatter plot for visual inspection
+            figure('Visible', 'off');
+            scatter(pldaps_times, ripple_times, 'filled');
+            hold on;
+            plot(pldaps_times, predicted_ripple_times, 'r-');
+            title(['Timestamp Correction Fit for ' job.unique_id]);
+            xlabel('PLDAPS Time (s)');
+            ylabel('Ripple Time (s)');
+            legend('Data', 'Linear Fit');
+            grid on;
+
+            % Apply correction to gSac_4factors trials
+            gsac_indices = find(is_gsac_4factors_trial);
+            for i = 1:length(gsac_indices)
+                nevIdx = gsac_indices(i);
+                pdsIdx = nev_to_pds_map(nevIdx);
+
+                if ~isnan(pdsIdx) && isfield(p_data.trData(pdsIdx), 'timing') && isfield(p_data.trData(pdsIdx).timing, 'trialStartPTB')
+                    pds_start_time = p_data.trData(pdsIdx).timing.trialStartPTB;
+                    corrected_nev_start = polyval(mapping_params, pds_start_time);
+
+                    % Overwrite the faulty trialBegin timestamp
+                    eventTimes.trialBegin(nevIdx) = corrected_nev_start;
+                end
+            end
+            fprintf('Timestamp correction applied to %d gSac_4factors trials.\n', length(gsac_indices));
+        else
+            warning('Not enough reliable trials to build a timestamp correction model for session %s.', job.unique_id);
+        end
+    else
+        warning('No reliable trials found to build a timestamp correction model for session %s.', job.unique_id);
+    end
+else
+    fprintf('No gSac_4factors trials found in this session. Skipping timestamp correction.\n');
+end
+
+
 %% 5. Save Intermediate File
 outputFileName = sprintf('%s_intermediate_data.mat', job.unique_id);
 outputFilePath = fullfile(intermediateDir, outputFileName);
