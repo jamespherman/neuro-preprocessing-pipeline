@@ -595,36 +595,41 @@ if any(is_gsac_4factors_trial)
         pldaps_times = [];
         ripple_times = [];
 
-        % Collect paired timestamps from good trials
-        for i = 1:length(good_trial_indices)
-            nevIdx = good_trial_indices(i);
-            pdsIdx = nev_to_pds_map(nevIdx);
-
-            if ~isnan(pdsIdx) && isfield(p_data.trData(pdsIdx), 'timing') && isfield(p_data.trData(pdsIdx).timing, 'trialStartPTB')
-                pldaps_times(end+1) = p_data.trData(pdsIdx).timing.trialStartPTB;
-                ripple_times(end+1) = eventTimes.trialBegin(nevIdx);
-            end
-        end
-
+        % Collect paired timestamps from good trials. First define vectors
+        % of trial start times from PTB and from NEV, then select values
+        % from non-gSac_4factors trials:
+        trialStartPTB = arrayfun(@(x)x.timing.trialStartPTB, ...
+            p_data.trData);
+        pldaps_times = trialStartPTB(nev_to_pds_map(good_trial_indices));
+        ripple_times = eventTimes.trialBegin(good_trial_indices);
+        
         % Ensure we have enough points to build a model
         if numel(pldaps_times) > 1
-            % Compute the linear mapping
-            mapping_params = polyfit(pldaps_times, ripple_times, 1);
+            % Compute the linear mapping. Note that by requesting the 3rd
+            % output argument 'mu' we request that polyfit center and scale
+            % the X data before computing the mapping so we must pass 'mu'
+            % back to 'polyval' as well:
+            [mapping_params, stats, mu] = polyfit(pldaps_times, ...
+                ripple_times, 1);
 
             % Verification of the fit
-            predicted_ripple_times = polyval(mapping_params, pldaps_times);
+            predicted_ripple_times = polyval(mapping_params, ...
+                pldaps_times, [], mu);
             residuals = ripple_times - predicted_ripple_times;
 
             if max(abs(residuals)) > 0.001 % 1 ms threshold
-                warning('Timestamp correction fit is poor for session %s. Max residual: %.4f s', job.unique_id, max(abs(residuals)));
+                warning(['Timestamp correction fit is ' ...
+                    'poor for session %s. Max residual: %.4f s'], ...
+                    job.unique_id, max(abs(residuals)));
             end
 
             % Generate a scatter plot for visual inspection
-            figure('Visible', 'off');
+            figure;
             scatter(pldaps_times, ripple_times, 'filled');
             hold on;
             plot(pldaps_times, predicted_ripple_times, 'r-');
-            title(['Timestamp Correction Fit for ' job.unique_id]);
+            title(['Timestamp Correction Fit for ' job.unique_id ...
+                ' | R^2 = ' num2str(stats.rsquared)]);
             xlabel('PLDAPS Time (s)');
             ylabel('Ripple Time (s)');
             legend('Data', 'Linear Fit');

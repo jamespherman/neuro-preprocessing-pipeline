@@ -32,6 +32,11 @@ function success = consolidate_data(job, config)
         end
         load(behavioralDataPath, 'trialInfo', 'eventTimes', 'eventValuesTrials');
 
+        % close any opened figure windows
+        try close all force;
+        catch me
+        end
+
         % 2. Load Kilosort output
         if ~exist(spike_times_path, 'file') || ~exist(spike_clusters_path, 'file') || ~exist(cluster_info_path, 'file')
             error('consolidate:consolidate_data:kilosortOutputNotFound', 'One or more Kilosort output files are missing in %s', jobDataDir);
@@ -47,6 +52,10 @@ function success = consolidate_data(job, config)
         existing_data = load(sessionDataPath, 'session_data');
         wfMeans = existing_data.session_data.spikes.wfMeans;
         wfStds = existing_data.session_data.spikes.wfStds;
+        % close any opened figure windows
+        try close all force;
+        catch me
+        end
 
         % --- Consolidate data into a single struct ---
 
