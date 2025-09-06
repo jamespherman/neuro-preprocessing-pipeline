@@ -646,6 +646,15 @@ if any(is_gsac_4factors_trial)
             saveas(gcf, plotFileName);
             close(gcf); % Close the figure after saving
 
+            % Define the mapping from target NEV fields to source PLDAPS fields
+            target_to_source_map = containers.Map(...
+                {'CUE_ON', 'fixAq', 'fixBreak', 'fixOff', 'fixOn', 'joyPress', 'lowTone', 'reward', 'REWARD_GIVEN', 'saccadeOffset', 'saccadeOnset', 'targetAq', 'targetOff', 'targetOn', 'targetReillum', 'trialEnd', 'TRIAL_END'}, ...
+                {'pdsCueOn', 'pdsFixAq', 'pdsBrokeFix', 'pdsFixOff', 'pdsFixOn', 'pdsJoyPress', 'pdsTone', 'pdsReward', 'pdsReward', 'pdsSaccadeOffset', 'pdsSaccadeOnset', 'pdsTargetAq', 'pdsTargetOff', 'pdsTargetOn', 'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd'} ...
+            );
+
+            % Define NEV fields to be nulled
+            fields_to_null = {'nonStart', 'blinkDuringSac'};
+
             % Apply correction to gSac_4factors trials
             gsac_indices = find(is_gsac_4factors_trial);
             for i = 1:length(gsac_indices)
@@ -658,6 +667,39 @@ if any(is_gsac_4factors_trial)
 
                     % Overwrite the faulty trialBegin timestamp
                     eventTimes.trialBegin(nevIdx) = corrected_nev_start;
+
+                    % Loop through the keys of the mapping
+                    target_fields = keys(target_to_source_map);
+                    for k = 1:length(target_fields)
+                        target_field = target_fields{k};
+                        source_field = target_to_source_map(target_field);
+
+                        if isfield(eventTimes, source_field)
+                            % Retrieve the relative event time from the PLDAPS data
+                            relative_time = eventTimes.(source_field)(nevIdx);
+
+                            if ~isnan(relative_time)
+                                % Calculate the absolute event time in the PLDAPS time base
+                                absolute_pds_time = pds_start_time + relative_time;
+
+                                % Apply the full linear transformation to get the corrected time in the Ripple time base
+                                corrected_absolute_time = polyval(mapping_params, absolute_pds_time, [], mu);
+
+                                % Overwrite the timestamp in the target field
+                                if isfield(eventTimes, target_field)
+                                    eventTimes.(target_field)(nevIdx) = corrected_absolute_time;
+                                end
+                            end
+                        end
+                    end
+
+                    % Nullify unreliable fields
+                    for k = 1:length(fields_to_null)
+                        field_to_null = fields_to_null{k};
+                        if isfield(eventTimes, field_to_null)
+                            eventTimes.(field_to_null)(nevIdx) = NaN;
+                        end
+                    end
                 end
             end
             fprintf('Timestamp correction applied to %d gSac_4factors trials.\n', length(gsac_indices));
