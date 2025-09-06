@@ -39,30 +39,30 @@ The final step merges the spike data (from Kilosort) and the behavioral data (fr
 
 ---
 
-## The `sessions_manifest.csv` File
+## The `session_manifest.csv` File
 
-This pipeline is controlled by the `config/sessions_manifest.csv` file. Each row represents a single, atomic unit of work (typically the data from one probe in a recording session).
+This pipeline is controlled by the `config/session_manifest.csv` file. Each row represents a single, atomic unit of work (typically the data from one probe in a recording session).
 
 ### Manifest Columns
 
 | Column Name | Description |
 | :--- | :--- |
-| `unique_id` | The unique primary key for this job (e.g., `MonkeyA_20250822_SC`). |
-| `session_group_id`| An ID to link all probes recorded simultaneously. |
-| `monkey` | The name of the subject. |
-| `date` | The date of the recording (YYYY-MM-DD). |
-| `experiment_pc_name`| The name of the behavioral control PC (`pldaps1` or `pldaps2`). |
-| `probe_type` | The type of probe used (e.g., `Plexon V-Probe`). |
-| `brain_area` | The brain area targeted by this probe (e.g., `SC`). |
-| `channel_numbers`| A MATLAB-readable string defining the channels for this probe (e.g., `'1:32'`). |
-| `channel_ordering`| A string defining the probe's physical channel order. |
-| `raw_filename_base`| The base name of the raw data files (e.g., `monkeya_08222025_01`). |
-| `dat_status` | Status of the raw neural data to binary (`.dat`) conversion. Values: `pending`, `complete`, `error`. |
-| `behavior_status` | Status of the behavioral data preparation. Values: `pending`, `complete`, `error`. |
-| `kilosort_status` | Status of the manual Kilosort/Phy spike sorting. Values: `pending`, `complete`. |
-| `waveform_status` | Status of the mean waveform extraction. Values: `pending`, `complete`, `error`. |
-| `consolidation_status`| Status of the final data consolidation. Values: `pending`, `complete`, `error`. |
-| `notes` | Free-text field for comments. |
+| `unique_id` | A unique identifier for a single recording from a single probe, constructed as `{monkey}_{date}_{brain_area}`. |
+| `session_group_id`| An identifier that links multiple recordings from the same day and animal (e.g., from two different probes). |
+| `monkey` | The name of the subject monkey (e.g., `Feynman`, `Newton`). |
+| `date` | The date of the recording session in `MM_DD_YYYY` format. |
+| `experiment_pc_name`| The name of the PC that ran the behavioral task (e.g., `pldaps2`). |
+| `probe_type` | The type of neural probe used for the recording (e.g., `nnVector`, `vProbe`). |
+| `brain_area` | The targeted brain region for this specific recording (e.g., `SNc`, `SC`). |
+| `channel_numbers`| The range of channel numbers on the headstage that correspond to this probe (e.g., `1:32`). |
+| `channel_ordering`| A string representing the physical layout and ordering of channels on the probe, used by Kilosort. |
+| `raw_filename_base`| The base name of the raw neural data files (e.g., `feynman_08052025_01`). |
+| `dat_status` | Status of the `.dat` file conversion step. Values: `pending`, `complete`, `error`. |
+| `behavior_status` | Status of the behavioral data preparation step. Values: `pending`, `complete`, `error`. |
+| `kilosort_status` | Status of the Kilosort spike sorting step. Values: `pending`, `complete`. |
+| `waveform_status` | Status of the mean waveform extraction step. Values: `pending`, `complete`, `error`. |
+| `consolidation_status`| Status of the final data consolidation step. Values: `pending`, `complete`, `error`. |
+| `notes` | Free-text field for any relevant notes about the session, often including the names of the behavioral tasks. |
 
 ---
 
