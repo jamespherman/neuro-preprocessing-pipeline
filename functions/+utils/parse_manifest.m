@@ -33,7 +33,7 @@ function sessionTable = parse_manifest(manifestPath)
         'unique_id', 'session_group_id', 'monkey', 'date', ...
         'experiment_pc_name', 'probe_type', 'brain_area', ...
         'channel_numbers', 'channel_ordering', 'raw_filename_base', ...
-        'dat_status', 'behavior_status', 'kilosort_status', ...
+        'dat_status', 'behavior_status', 'kilosort_status', 'waveform_status', ...
         'consolidation_status', 'notes'
     };
 
@@ -44,7 +44,7 @@ function sessionTable = parse_manifest(manifestPath)
     end
 
     % 2. Validate status columns without converting to categorical
-    statusColumns = {'dat_status', 'behavior_status', 'kilosort_status', 'consolidation_status'};
+    statusColumns = {'dat_status', 'behavior_status', 'kilosort_status', 'waveform_status', 'consolidation_status'};
     allowedStatuses = {'pending', 'complete', 'error'};
 
     for i = 1:length(statusColumns)

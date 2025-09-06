@@ -60,6 +60,7 @@ This pipeline is controlled by the `config/sessions_manifest.csv` file. Each row
 | `dat_status` | Status of the raw neural data to binary (`.dat`) conversion. Values: `pending`, `complete`, `error`. |
 | `behavior_status` | Status of the behavioral data preparation. Values: `pending`, `complete`, `error`. |
 | `kilosort_status` | Status of the manual Kilosort/Phy spike sorting. Values: `pending`, `complete`. |
+| `waveform_status` | Status of the mean waveform extraction. Values: `pending`, `complete`, `error`. |
 | `consolidation_status`| Status of the final data consolidation. Values: `pending`, `complete`, `error`. |
 | `notes` | Free-text field for comments. |
 

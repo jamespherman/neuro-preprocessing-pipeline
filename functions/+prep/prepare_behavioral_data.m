@@ -630,6 +630,17 @@ if any(is_gsac_4factors_trial)
             legend('Data', 'Linear Fit');
             grid on;
 
+            % Create diagnostics directory if it doesn't exist
+            diagnosticsDir = fullfile(config.processedDataDir, job.unique_id, 'diagnostics');
+            if ~exist(diagnosticsDir, 'dir')
+                mkdir(diagnosticsDir);
+            end
+
+            % Save the figure
+            plotFileName = fullfile(diagnosticsDir, job.unique_id + "_timestamp_fit.png");
+            saveas(gcf, plotFileName);
+            close(gcf); % Close the figure after saving
+
             % Apply correction to gSac_4factors trials
             gsac_indices = find(is_gsac_4factors_trial);
             for i = 1:length(gsac_indices)

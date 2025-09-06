@@ -83,28 +83,53 @@ for i = 1:height(jobs)
         end
     end
 
-    % --- 4. Data Consolidation ---
-    % This step can only run if all prerequisite steps are complete.
-    if strcmp(job.consolidation_status, "pending") && ...
+    % --- 4. Waveform Extraction ---
+    if strcmp(job.waveform_status, "pending") && ...
        strcmp(job.dat_status, "complete") && ...
        strcmp(job.behavior_status, "complete") && ...
        strcmp(job.kilosort_status, "complete")
         try
-            fprintf('Beginning data consolidation...\n');
-            success = consolidate.consolidate_session(job, config);
+            fprintf('Beginning waveform extraction...\n');
+            success = consolidate.extract_waveforms(job, config);
+            if success
+                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'waveform_status');
+                job.waveform_status = "complete"; % Update local job variable
+                fprintf('Waveform extraction successful.\n');
+            else
+                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'waveform_status');
+            end
+        catch ME
+            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'waveform_status');
+            fprintf(2, 'ERROR during waveform extraction for %s:\n', job.unique_id);
+            fprintf(2, '%s\n', ME.message);
+            warning('Execution paused in the debugger. Inspect variables and type ''dbcont'' to continue.');
+            keyboard;
+        end
+    end
+
+    % --- 5. Data Consolidation ---
+    % This step now depends on the new waveform extraction step.
+    if strcmp(job.consolidation_status, "pending") && ...
+       strcmp(job.dat_status, "complete") && ...
+       strcmp(job.behavior_status, "complete") && ...
+       strcmp(job.kilosort_status, "complete") && ...
+       strcmp(job.waveform_status, "complete")
+        try
+            fprintf('Beginning final data consolidation...\n');
+            success = consolidate.consolidate_data(job, config);
             if success
                 utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'consolidation_status');
-                job.consolidation_status = "complete"; % Update local job variable
+                job.consolidation_status = "complete";
                 fprintf('Data consolidation successful.\n');
             else
                 utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
             end
         catch ME
             utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
-    fprintf(2, 'ERROR during data consolidation for %s:\n', job.unique_id); % Print error in red
-    fprintf(2, '%s\n', ME.message);
-    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
-    keyboard; % Pause execution for debugging
+            fprintf(2, 'ERROR during data consolidation for %s:\n', job.unique_id);
+            fprintf(2, '%s\n', ME.message);
+            warning('Execution paused in the debugger. Inspect variables and type ''dbcont'' to continue.');
+            keyboard;
         end
     end
 end
