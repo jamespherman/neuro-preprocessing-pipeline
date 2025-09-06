@@ -654,7 +654,7 @@ if any(is_gsac_4factors_trial)
 
                 if ~isnan(pdsIdx) && isfield(p_data.trData(pdsIdx), 'timing') && isfield(p_data.trData(pdsIdx).timing, 'trialStartPTB')
                     pds_start_time = p_data.trData(pdsIdx).timing.trialStartPTB;
-                    corrected_nev_start = polyval(mapping_params, pds_start_time);
+                    corrected_nev_start = polyval(mapping_params, pds_start_time, [], mu);
 
                     % Overwrite the faulty trialBegin timestamp
                     eventTimes.trialBegin(nevIdx) = corrected_nev_start;
