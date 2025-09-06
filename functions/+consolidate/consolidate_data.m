@@ -19,7 +19,7 @@ function success = consolidate_data(job, config)
 
         % Define paths for all input files
         behavioralDataPath = fullfile(jobDataDir, job.unique_id + "_intermediate_data.mat");
-        waveformsPath = fullfile(jobDataDir, job.unique_id + "_waveforms.mat");
+        sessionDataPath = fullfile(jobDataDir, job.unique_id + "_session_data.mat");
         spike_times_path = fullfile(jobDataDir, 'spike_times.npy');
         spike_clusters_path = fullfile(jobDataDir, 'spike_clusters.npy');
         cluster_info_path = fullfile(jobDataDir, 'cluster_info.tsv');
@@ -40,11 +40,13 @@ function success = consolidate_data(job, config)
         spike_clusters = utils.readNPY(spike_clusters_path);
         cluster_info = tdfread(cluster_info_path);
 
-        % 3. Load extracted waveforms
-        if ~exist(waveformsPath, 'file')
-            error('consolidate:consolidate_data:waveformsNotFound', 'Waveform data file not found: %s', waveformsPath);
+        % 3. Load extracted waveforms from the existing session_data file
+        if ~exist(sessionDataPath, 'file')
+            error('consolidate:consolidate_data:sessionDataNotFound', 'Session data file not found: %s', sessionDataPath);
         end
-        load(waveformsPath, 'wfMeans', 'wfStds');
+        existing_data = load(sessionDataPath, 'session_data');
+        wfMeans = existing_data.session_data.spikes.wfMeans;
+        wfStds = existing_data.session_data.spikes.wfStds;
 
         % --- Consolidate data into a single struct ---
 
@@ -67,7 +69,7 @@ function success = consolidate_data(job, config)
         % --- Save the final consolidated data ---
 
         outputFilePath = fullfile(jobDataDir, job.unique_id + "_session_data.mat");
-        save(outputFilePath, 'session_data');
+        save(outputFilePath, 'session_data', '-v7.3');
 
         fprintf('Successfully consolidated data for session %s\n', job.unique_id);
         success = true;
