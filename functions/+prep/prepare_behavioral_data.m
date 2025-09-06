@@ -591,9 +591,6 @@ if any(is_gsac_4factors_trial)
     good_trial_indices = find(~is_gsac_4factors_trial & ~isnan(nev_to_pds_map));
 
     if ~isempty(good_trial_indices)
-        % Initialize vectors for paired timestamps
-        pldaps_times = [];
-        ripple_times = [];
 
         % Collect paired timestamps from good trials. First define vectors
         % of trial start times from PTB and from NEV, then select values
@@ -636,7 +633,8 @@ if any(is_gsac_4factors_trial)
             grid on;
 
             % Create diagnostics directory if it doesn't exist
-            diagnosticsDir = fullfile(config.processedDataDir, job.unique_id, 'diagnostics');
+            diagnosticsDir = fullfile(config.processedDataDir, ...
+                job.unique_id, 'diagnostics');
             if ~exist(diagnosticsDir, 'dir')
                 mkdir(diagnosticsDir);
             end
