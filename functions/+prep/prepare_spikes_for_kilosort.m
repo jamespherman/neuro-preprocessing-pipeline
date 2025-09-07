@@ -16,8 +16,9 @@ function success = prepare_spikes_for_kilosort(job, config)
 try
     % 1. Construct Paths
     kilosortOutputDir = fullfile(config.processedDataDir, job.unique_id);
-    rawFilePath = fullfile(config.rawNeuralDataDir, job.raw_filename_base + ".ns5");
-    datFilePath = fullfile(kilosortOutputDir, job.unique_id + ".dat");
+    rawFilePath = fullfile(config.rawNeuralDataDir, ...
+        [job.raw_filename_base, '.ns5']);
+    datFilePath = fullfile(kilosortOutputDir, [job.unique_id, '.dat']);
 
     % 2. Create Directory
     if ~exist(kilosortOutputDir, 'dir')
@@ -25,17 +26,25 @@ try
     end
 
     % 3. Load Data
+    % 'uv' flag specifies that we want to read the data in microvolts.
     nsxData = utils.openNSx('uv', 'read', char(rawFilePath));
 
-    % 4. Define channelIndices
+    % 4. Define channelIndices from the manifest.
     channelIndices = str2num(job.channel_numbers);
+    manifestProbeType = char(job.probe_type);
 
     % --- Automated Validation of Channel Ordering ---
+    % This section validates that the probe type in the manifest matches
+    % the correlation structure of the data. It does this by checking
+    % known physical channel layouts. The correct layout should have high
+    % correlation between adjacent channels.
     try
+        % Take a subset of data for correlation analysis.
         numSamplesForCorr = min(size(nsxData.Data(channelIndices, :), 2), 900000);
         dataSubsetForCorr = nsxData.Data(channelIndices, 1:numSamplesForCorr);
         corrMatrix = corrcoef(double(dataSubsetForCorr'));
 
+        % Define known physical channel orderings for different probes.
         knownOrderings = containers.Map;
         knownOrderings('vProbe')     = [32:-2:2, 31:-2:1];
         knownOrderings('nnVector')   = [17:2:31 18:2:32 2:2:16 1:2:15];
@@ -46,12 +55,16 @@ try
         predictedOrdering = 'None';
         orderingKeys = keys(knownOrderings);
 
+        % Test each known ordering to see which one best explains the data.
         for i = 1:length(orderingKeys)
             key = orderingKeys{i};
             orderingVector = knownOrderings(key);
 
             if length(orderingVector) == size(corrMatrix, 1)
+                % Reorder the correlation matrix according to the template.
                 reorderedMatrix = corrMatrix(orderingVector, orderingVector);
+                % A good match will have high values on the first
+                % off-diagonal. We sum this diagonal to get a score.
                 score = sum(diag(reorderedMatrix, 1));
 
                 if score > bestScore
@@ -61,16 +74,18 @@ try
             end
         end
 
-        manifestProbeType = char(job.probe_type);
+        % Compare the best-fitting ordering to the one in the manifest.
         if strcmpi(manifestProbeType, predictedOrdering)
-            fprintf('Channel order validation passed for %s.\n', job.unique_id);
+            fprintf('Channel order validation passed for %s.\n', ...
+                job.unique_id);
         else
-            warning('prep:prepare_spikes_for_kilosort:mismatch', ...
-                    'WARNING for %s: Channel order mismatch! Manifest specifies ''%s'', but data correlation suggests ''%s''.', ...
+            warning('prep:mismatch', ...
+                    ['WARNING for %s: Channel order mismatch! Manifest: ', ...
+                    '''%s'', but data suggests ''%s''.'], ...
                     job.unique_id, manifestProbeType, predictedOrdering);
         end
     catch valEx
-        warning('prep:prepare_spikes_for_kilosort:validationFailed', ...
+        warning('prep:validationFailed', ...
                 'Automated channel order validation failed for %s. Error: %s', ...
                 job.unique_id, valEx.message);
     end
@@ -82,16 +97,30 @@ try
         error('Could not open file for writing: %s', char(datFilePath));
     end
 
-    fwrite(fid, nsxData.Data(channelIndices(knownOrderings(predictedOrdering)), :), 'int16');
-    fclose(fid);
+    % Use the channel ordering specified in the manifest as the source of
+    % truth. The validation above serves as a check.
+    if isKey(knownOrderings, manifestProbeType)
+        finalOrdering = knownOrderings(manifestProbeType);
+        % Reorder the data according to the manifest's probe type.
+        reorderedData = nsxData.Data(channelIndices(finalOrdering), :);
+        fwrite(fid, reorderedData, 'int16');
+    else
+        % If the probe type is unknown, write in default order and warn.
+        warning('prep:unknownProbe', ...
+            'Unknown probe type "%s". Writing channels in default order.', ...
+            manifestProbeType);
+        fwrite(fid, nsxData.Data(channelIndices, :), 'int16');
+    end
 
+    fclose(fid);
     success = true;
 
 catch ME
-    fprintf(2, 'ERROR during spike preparation for %s:\n', job.unique_id); % Print error in red
+    fprintf(2, 'ERROR during spike preparation for %s:\n', job.unique_id);
     fprintf(2, '%s\n', ME.message);
-    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
-    keyboard; % Pause execution for debugging
+    warning(['Execution paused. Inspect variables (ME, job, config) ' ...
+        'and type ''dbcont'' to continue or ''dbquit'' to exit.']);
+    keyboard; % Pause for debugging
     success = false;
 end
 

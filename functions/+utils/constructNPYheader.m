@@ -2,87 +2,73 @@
 
 
 function header = constructNPYheader(dataType, shape, varargin)
+%CONSTRUCTNPYHEADER Creates a header for a .npy file.
+%   This function generates the byte-level header required for the NumPy
+%   .npy file format, specifying the data type, shape, and memory layout
+%   of the array to be saved.
+%
+%   Inputs:
+%       dataType (string) - The MATLAB data type (e.g., 'int16', 'double').
+%       shape (vector)    - A vector representing the dimensions of the array.
+%       varargin          - Optional arguments:
+%                           {1}: fortranOrder (logical, default true)
+%                           {2}: littleEndian (logical, default true)
+%
+%   Output:
+%       header (uint8 vector) - The fully constructed .npy header.
 
-	if ~isempty(varargin)
-		fortranOrder = varargin{1}; % must be true/false
-		littleEndian = varargin{2}; % must be true/false
-	else
-		fortranOrder = true;
-		littleEndian = true;
-	end
+    % Set default values for optional arguments.
+    fortranOrder = true;
+    littleEndian = true;
+    if nargin > 2
+        fortranOrder = varargin{1};
+    end
+    if nargin > 3
+        littleEndian = varargin{2};
+    end
 
-    dtypesMatlab = {'uint8','uint16','uint32','uint64','int8','int16','int32','int64','single','double', 'logical'};
-    dtypesNPY = {'u1', 'u2', 'u4', 'u8', 'i1', 'i2', 'i4', 'i8', 'f4', 'f8', 'b1'};
+    % Define the mapping from MATLAB data types to NumPy's type strings.
+    dtypesMatlab = {'uint8','uint16','uint32','uint64','int8','int16', ...
+        'int32','int64','single','double', 'logical'};
+    dtypesNPY = {'u1', 'u2', 'u4', 'u8', 'i1', 'i2', ...
+        'i4', 'i8', 'f4', 'f8', 'b1'};
 
-    magicString = uint8([147 78 85 77 80 89]); %x93NUMPY
-    
+    % The .npy format starts with a "magic string" and version number.
+    magicString = uint8([147, 78, 85, 77, 80, 89]); % x93NUMPY
     majorVersion = uint8(1);
     minorVersion = uint8(0);
 
-    % build the dict specifying data type, array order, endianness, and
-    % shape
-    dictString = '{''descr'': ''';
-    
-    if littleEndian
-        dictString = [dictString '<'];
-    else
-        dictString = [dictString '>'];
+    % Build the dictionary string that describes the array.
+    % This is a Python-style dictionary literal.
+    shapeStr = strjoin(arrayfun(@num2str, shape, 'UniformOutput', false), ', ');
+    if numel(shape) == 1
+        shapeStr = [shapeStr, ',']; % Add trailing comma for 1D arrays.
     end
     
-    dictString = [dictString dtypesNPY{strcmp(dtypesMatlab,dataType)} ''', '];
+    if littleEndian, endianChar = '<'; else, endianChar = '>'; end
+    if fortranOrder, orderStr = 'True'; else, orderStr = 'False'; end
     
-    dictString = [dictString '''fortran_order'': '];
+    dtypeStr = dtypesNPY{strcmp(dtypesMatlab, dataType)};
     
-    if fortranOrder
-        dictString = [dictString 'True, '];
-    else
-        dictString = [dictString 'False, '];
-    end
+    dictString = sprintf("{'descr': '%s%s', 'fortran_order': %s, 'shape': (%s), }", ...
+        endianChar, dtypeStr, orderStr, shapeStr);
     
-    dictString = [dictString '''shape'': ('];
+    % The total header length must be a multiple of 16 bytes.
+    % The header consists of the magic string (6), version (2), header
+    % length field (2), and the dictionary string.
+    baseHeaderLength = 6 + 2 + 2 + length(dictString);
     
-%     if length(shape)==1 && shape==1
-%         
-%     else
-%         for s = 1:length(shape)
-%             if s==length(shape) && shape(s)==1
-%                 
-%             else
-%                 dictString = [dictString num2str(shape(s))];
-%                 if length(shape)>1 && s+1==length(shape) && shape(s+1)==1
-%                     dictString = [dictString ','];
-%                 elseif length(shape)>1 && s<length(shape)
-%                     dictString = [dictString ', '];
-%                 end            
-%             end
-%         end
-%         if length(shape)==1
-%             dictString = [dictString ','];
-%         end
-%     end
-
-    for s = 1:length(shape)
-        dictString = [dictString num2str(shape(s))];
-        if s<length(shape)
-            dictString = [dictString ', '];
-        end
-    end
+    % Calculate the required padding.
+    headerLengthPadded = ceil(baseHeaderLength / 16) * 16;
     
-    dictString = [dictString '), '];
+    % The header length field itself is a 16-bit little-endian integer.
+    headerLength = typecast(int16(headerLengthPadded - 10), 'uint8');
     
-    dictString = [dictString '}'];
+    % Pad the header with spaces (ASCII 32) and end with a newline (ASCII 10).
+    padding = repmat(uint8(32), 1, headerLengthPadded - baseHeaderLength);
+    padding(end) = uint8(10);
     
-    totalHeaderLength = length(dictString)+10; % 10 is length of magicString, version, and headerLength
-    
-    headerLengthPadded = ceil(double(totalHeaderLength+1)/16)*16; % the whole thing should be a multiple of 16
-                                                                  % I add 1 to the length in order to allow for the newline character
-
-	% format specification is that headerlen is little endian. I believe it comes out so using this command...
-    headerLength = typecast(int16(headerLengthPadded-10), 'uint8');
-	
-    zeroPad = zeros(1,headerLengthPadded-totalHeaderLength, 'uint8')+uint8(32); % +32 so they are spaces
-    zeroPad(end) = uint8(10); % newline character
-    
-    header = uint8([magicString majorVersion minorVersion headerLength dictString zeroPad]);
-
+    % Concatenate all parts to form the final header.
+    header = [magicString, majorVersion, minorVersion, headerLength, ...
+              uint8(dictString), padding];
 end

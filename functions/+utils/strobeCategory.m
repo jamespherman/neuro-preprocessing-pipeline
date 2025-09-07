@@ -1,64 +1,68 @@
 function strobeCategory = strobeCategory(strobeValue, codes, cats)
+% STROBECATEGORY Determines the category of each strobe code (legacy).
+%
+% This function is a legacy helper that attempts to classify each raw
+% event value as either a timing strobe (0) or an info strobe (1). It has
+% complex logic to handle cases where the value of an info strobe might be
+% the same as a known timing strobe code.
+%
+%   Inputs:
+%       strobeValue - A vector of numerical event codes.
+%       codes       - A struct mapping code names to numerical values.
+%       cats        - A struct mapping code names to categories (0 or 1).
+%
+%   Outputs:
+%       strobeCategory - A vector of the same size as strobeValue, with
+%                        the determined category for each value.
 
-% list fieldnames in "codes" structure:
+% Get the names of all defined strobe codes.
 codeNames = fieldnames(codes);
 
-% make a list of categories for each strobe values, two columns,
-% cataegories in the first, strobe value in the second.
+% Create a mapping from strobe numerical value to its category (0 or 1).
 catsAndCodes = [cellfun(@(x)cats.(x), codeNames), ...
-    cellfun(@(x)codes.(x), codeNames)];
+                cellfun(@(x)codes.(x), codeNames)];
 
-% use 'ismember' to get an indexed list of the rows of "catsAndCodes" where
-% we find each element of "strobeValue"; our plan is to use this to index
-% the 1st column of "catsAndCodes", thus giving us the "cat":
-[codeVals, codeIdx] = ismember(strobeValue, catsAndCodes(:,2));
+% For each event in the input strobeValue vector, find its corresponding
+% category from the map.
+[isKnownCode, codeIdx] = ismember(strobeValue, catsAndCodes(:,2));
 
-% make a variable the same size as "strobeValue" to hold the category:
+% Initialize the output category vector.
 strobeCategory = codeIdx;
 
-% define category values in "strobeCategory" for those entries that we have
-% strobe "names" (e.g. not something like a specific variable infostrobe
-% value we're strobing).
-strobeCategory(codeVals == 1) = catsAndCodes(codeIdx(codeVals == 1), 1);
+% For known codes, assign their predefined category.
+strobeCategory(isKnownCode) = catsAndCodes(codeIdx(isKnownCode), 1);
 
-% define category values for remaining non-strobe-name entries (presumably
-% specific variable infoStrobes values following infoStrobes at the end of
-% a trial).
-strobeCategory(codeVals == 0) = 1;
+% For unknown codes (values that are not in our 'codes' list), assume they
+% are the second part of an "info strobe" and assign them category 1.
+strobeCategory(isKnownCode == 0) = 1;
 
-% it seems that for a couple of "infoStrobes" we need to make sure that
-% values following those infoStrobes are set to "1" because those values
-% might take on "normalStrobe" values. Define a list of "infoStrobe" names
-% here that are known to be problematic:
+% --- Special Case Handling ---
+% The following logic attempts to correct for cases where a data value
+% (which should be category 1) is the same as a timing code (category 0).
+% It identifies "problematic" info strobes (like random seeds) whose
+% values are likely to conflict with timing codes.
 probInfoNames = codeNames(contains(codeNames, 'Seed'));
 probInfoNames{end+1} = 'targetTheta';
-
-% make a list of values corresponding to each of the problematic
-% infostrobes:
 probInfoVals = cellfun(@(x)codes.(x), probInfoNames);
 
-% list event value locations corresponding to "probInfoNames", and if one
-% of them is the final strobe, get rid of that one:
+% Find the locations of these problematic info strobes.
 tempInfoLocs = find(ismember(strobeValue, probInfoVals));
+% Ensure we don't go past the end of the strobe list.
 tempInfoLocs(tempInfoLocs == length(strobeValue)) = [];
 
-% set strobe values following "seedVals" too "1"
+% Force the category of the value *following* these strobes to be 1.
 strobeCategory(tempInfoLocs + 1) = 1;
 
-% Check for a lone "0" amidst "1s" and get rid of them. Do this by
-% computing the "2nd derrivative" of strobeCategory and looking for values
-% of +2. We then recompute "twoDiff" to make sure everything is clean:
+% Another correction: find any isolated '0's surrounded by '1's and flip
+% them to '1'. This is done by looking at the second derivative of the
+% category vector. A pattern of [1, 0, 1] will result in a value of 2 in
+% the second derivative at the position of the '0'.
 twoDiff = [diff([0; diff(strobeCategory)]); 0];
 strobeCategory(twoDiff == 2) = 1;
-twoDiff = [diff([0; diff(strobeCategory)]); 0];
 
-% if the final value of "strobeCategory" is different from the value
-% immediately before it, change it to match the value immediately before:
+% Final cleanup: if the last category is different from the second to last,
+% make them match. This handles cases where a trial ends mid-strobe.
 if strobeCategory(end) ~= strobeCategory(end-1)
     strobeCategory(end) = strobeCategory(end-1);
 end
-
-% look for "-1, 1" or "1, -1" by taking a second diff and looking for
-% absolute value of 2:
-discontLog = abs(twoDiff) == 2;
 end

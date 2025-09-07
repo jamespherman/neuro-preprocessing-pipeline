@@ -1,141 +1,136 @@
 function sessionFileName = catOldOutput(varargin)
+% CATOLDOUTPUT Consolidates a directory of loose trial files into one .mat file.
+%
+% This function is designed to handle an older PLDAPS data format where
+% each trial was saved as a separate .mat file. It loads all trial files,
+% merges them into a single structure, and saves it as a session file.
 
-% Turn off function handle warning
+% Temporarily turn off a warning that can occur when loading data
+% containing old function handles.
 warningState = warning('off', ...
     'MATLAB:load:cannotInstantiateFunctionHandle');
 
-% if the user supplies a directory, use that, otherwise, prompt user to
-% select one:
+% If no directory is provided, prompt the user to select one.
+% Note: For pipeline use, a path should always be provided.
 if nargin < 1
-    % prompt user to select a new output directory
-    newOutputFolderName = uigetdir('', ...
-        'Select an output folder...');
+    newOutputFolderName = uigetdir('', 'Select an output folder...');
 else
     newOutputFolderName = varargin{1};
 end
 
-% tell user we're loading data
-disp('Loading data...');
+disp('Loading and collating trial data...');
+% Use the helper function to load and merge all trial data.
+sessionData = load_and_collate_trials(newOutputFolderName);
 
-% load session's data
-q = lp(newOutputFolderName);
+disp('Saving consolidated session data...');
+% Construct the output filename based on the directory name.
+lastFileSepIdx = find(newOutputFolderName == filesep, 1, 'last');
+sessionFileName = [newOutputFolderName(1:lastFileSepIdx), ...
+    newOutputFolderName(lastFileSepIdx+1:end), '.mat'];
 
-% tell user we're saving session's data
-disp('Saving session data...');
+% Save the consolidated data.
+save(sessionFileName, '-struct', 'sessionData');
 
-% save session data
-t = find(newOutputFolderName == filesep, 1, 'last');
-sessionFileName = [newOutputFolderName(1:t) ...
-    newOutputFolderName(t+1:end) '.mat'];
-save(sessionFileName, '-struct', 'q');
-[~, lmid] = lastwarn;
-if strcmp(lmid, 'MATLAB:save:sizeTooBigForMATFile')
-    save(sessionFileName, '-v7.3', '-struct', 'q');
+% Check if the save command produced a "size too big" warning.
+% If so, re-save using the -v7.3 flag which supports larger files.
+[~, lastWarnId] = lastwarn;
+if strcmp(lastWarnId, 'MATLAB:save:sizeTooBigForMATFile')
+    fprintf('File size is large. Re-saving with -v7.3 flag...\n');
+    save(sessionFileName, '-v7.3', '-struct', 'sessionData');
 end
 
-% tell user we're back to "idle"
 disp('Done saving.');
-
-% Restore the original warning state
+% Restore the original warning state.
 warning(warningState);
-
 end
 
-function p = lp(sessionFolder)
-%   p = lp(sessionFolder)
-% 
-% loads the output of a pldaps_vK2 session to memory. 
-% first it loads the general 'p file' (holds all task info) and then loads
-% each 'trial file' into two strcut arrays: trVars & trData, each of length
-% nTrials. 
+function p = load_and_collate_trials(sessionFolder)
+% LOAD_AND_COLLATE_TRIALS Helper function to load and merge trial files.
 %
-% Input:
-%   sessionFolder - path to the folder that holds output of the session.
-%                   This folder should have one 'p' file and many 'trial'
-%                   files, save by saveP.
-%   no input      - function will open ui box for you to select a folder.
-% 
-% Output:
-%   single 'p' struct that holds all general and trial-by-trial data.
-%
-% See also pds.saveP
+% This function finds the main 'p.mat' file and all 'trial*.mat' files
+% within a session folder, then collates them into a single structure.
 
+% Find all .mat files in the specified session folder.
+fileList = dir(fullfile(sessionFolder, '*.mat'));
 
-% find files of interst:
-
-% if session Folder was not provided as input, have user select one:
-if ~exist('sessionFolder', 'var')
-    [sessionFolder] = uigetdir(pwd, 'Select the session folder you wish to load');
+% Find the main 'p.mat' file, which contains session-level parameters.
+idxP = find(strcmp({fileList.name}, 'p.mat'));
+if isempty(idxP)
+    error('Could not find the main "p.mat" file in %s.', sessionFolder);
+elseif numel(idxP) > 1
+    error('Found multiple "p.mat" files in %s.', sessionFolder);
 end
 
-% get all files in folder, but only .mat files:
-fileList = dir(sessionFolder);
-idxMat      = arrayfun(@(x) any(strfind(x.name, '.mat')), fileList);
-fileList    = fileList(idxMat);
-
-% get indices to the one 'p' file:
-idxP      = find(arrayfun(@(x) any(strfind(x.name, 'p.mat')), fileList));
-% get pointer to all 'trial' files:
-idxTrial  = find(arrayfun(@(x) any(strfind(x.name, 'trial') & strfind(x.name, '.mat')), fileList));
-
-%% Load'em up:
-
-% load the 'p file' into 'p':
-p = load(fullfile(sessionFolder, fileList(idxP).name));
-
+% Find all individual 'trial*.mat' files.
+isTrialFile = startsWith({fileList.name}, 'trial');
+idxTrial = find(isTrialFile);
 nTrials = numel(idxTrial);
 
-% First pass: discover all field names
+% Load the main 'p' structure.
+p = load(fullfile(sessionFolder, fileList(idxP).name));
+
+% --- Efficiently merge trial data ---
+% First pass: Discover all unique field names across all trial files
+% for both 'trVars' and 'trData' structures.
 all_trVars_fields = {};
 all_trData_fields = {};
 for iTr = 1:nTrials
     filePath = fullfile(sessionFolder, fileList(idxTrial(iTr)).name);
     trial_data = load(filePath);
+
+    % Loading a trial file might create a figure; close it immediately.
     close(findobj('Type', 'Figure'));
 
     if isfield(trial_data, 'trVars')
-        all_trVars_fields = union(all_trVars_fields, fieldnames(trial_data.trVars));
+        all_trVars_fields = union(all_trVars_fields, ...
+            fieldnames(trial_data.trVars));
     end
     if isfield(trial_data, 'trData')
-        all_trData_fields = union(all_trData_fields, fieldnames(trial_data.trData));
+        all_trData_fields = union(all_trData_fields, ...
+            fieldnames(trial_data.trData));
     end
 end
 
-% Pre-allocate struct arrays
+% Pre-allocate the structure arrays for performance. This avoids resizing
+% the array in a loop, which can be very slow in MATLAB.
 if ~isempty(all_trVars_fields)
-    trVars_template = cell2struct(cell(size(all_trVars_fields)), all_trVars_fields, 1);
+    trVars_template = cell2struct(cell(size(all_trVars_fields)), ...
+        all_trVars_fields, 1);
     p.trVars = repmat(trVars_template, nTrials, 1);
 else
     p.trVars = struct([]);
 end
 
 if ~isempty(all_trData_fields)
-    trData_template = cell2struct(cell(size(all_trData_fields)), all_trData_fields, 1);
+    trData_template = cell2struct(cell(size(all_trData_fields)), ...
+        all_trData_fields, 1);
     p.trData = repmat(trData_template, nTrials, 1);
 else
     p.trData = struct([]);
 end
 
-
-% Second pass: build the final struct array
+% Second pass: Populate the pre-allocated structure arrays.
 for iTr = 1:nTrials
     filePath = fullfile(sessionFolder, fileList(idxTrial(iTr)).name);
     trial_data = load(filePath);
-    close(findobj('Type', 'Figure'));
+    close(findobj('Type', 'Figure')); % Close any stray figures.
 
+    % Copy fields from the loaded trial's trVars.
     if isfield(trial_data, 'trVars')
         current_fields = fieldnames(trial_data.trVars);
         for j = 1:numel(current_fields)
-            p.trVars(iTr).(current_fields{j}) = trial_data.trVars.(current_fields{j});
+            p.trVars(iTr).(current_fields{j}) = ...
+                trial_data.trVars.(current_fields{j});
         end
     end
     
+    % Copy fields from the loaded trial's trData.
     if isfield(trial_data, 'trData')
         current_fields = fieldnames(trial_data.trData);
         for j = 1:numel(current_fields)
-            p.trData(iTr).(current_fields{j}) = trial_data.trData.(current_fields{j});
+            p.trData(iTr).(current_fields{j}) = ...
+                trial_data.trData.(current_fields{j});
         end
     end
 end
-
 end
