@@ -44,7 +44,8 @@ eventValues = digitalEvents(:, 2);
 eventTimes = digitalEvents(:, 3);
 
 % Get trial-by-trial event codes and times
-[trialInfo, eventTimes, eventValuesTrials] = utils.getEventTimes(eventValues, eventTimes);
+[trialInfo, eventTimes, eventValuesTrials] = ...
+    utils.getEventTimes(eventValues, eventTimes);
 nNevTrials = numel(eventValuesTrials);
 fprintf('Found %d trials in NEV file.\n', nNevTrials);
 
@@ -100,23 +101,28 @@ for i = 1:length(listing)
         % It's a directory, first check for the number of .mat files
         matFilesInDir = dir(fullfile(itemPath, '*.mat'));
         if numel(matFilesInDir) < 5
-            fprintf('  --> Skipping directory, contains fewer than 5 trials.\n');
+            fprintf(['  --> Skipping directory, contains fewer than ' ...
+                '5 trials.\n']);
             continue;
         end
 
         % Now, check for a pre-existing .mat file
         potentialMatFile = fullfile(item.folder, [item.name '.mat']);
         if exist(potentialMatFile, 'file')
-            fprintf('  Found matching summary file for directory: %s\n', item.name);
+            fprintf(['  Found matching summary file for directory: ' ...
+                '%s\n'], item.name);
             matFilePath = potentialMatFile;
         else
             % If no .mat file, create it by calling utils.catOldOutput
-            fprintf('  Found unconsolidated data directory: %s. Consolidating...\n', item.name);
+            fprintf(['  Found unconsolidated data directory: %s. ' ...
+                'Consolidating...\n'], item.name);
             try
                 matFilePath = utils.catOldOutput(itemPath);
-                fprintf('  --> Successfully created summary file: %s\n', matFilePath);
+                fprintf(['  --> Successfully created summary file: ' ...
+                    '%s\n'], matFilePath);
             catch ME
-                fprintf(2, '  Error consolidating directory %s: %s\n', item.name, ME.message);
+                fprintf(2, ['  Error consolidating directory %s: ' ...
+                    '%s\n'], item.name, ME.message);
                 continue; % Try the next item
             end
         end
@@ -130,7 +136,8 @@ for i = 1:length(listing)
 
     if ~isempty(matFilePath)
         fprintf('  Loading candidate file: %s\n', matFilePath);
-        warningState = warning('off', 'MATLAB:dispatcher:UnresolvedFunctionHandle');
+        warningState = warning('off', ...
+            'MATLAB:dispatcher:UnresolvedFunctionHandle');
         try
             matObj = matfile(matFilePath);
             varInfo = whos(matObj);
@@ -150,20 +157,24 @@ for i = 1:length(listing)
             end
 
             % Validate that the candidate structure has the correct PC name
-            if isfield(p_candidate, 'init') && isfield(p_candidate.init, 'pcName') && ...
-               strcmp(string(p_candidate.init.pcName(1:end-1)), job.experiment_pc_name)
+            if isfield(p_candidate, 'init') && isfield( ...
+                    p_candidate.init, 'pcName') && ...
+               strcmp(string(p_candidate.init.pcName(1:end-1)), ...
+               job.experiment_pc_name)
 
                 valid_p_structs{end+1} = p_candidate;
                 valid_paths{end+1} = matFilePath;
                 close(findobj('Type', 'Figure'));
-                fprintf('  --> Found and validated matching PLDAPS data.\n');
+                fprintf(['  --> Found and validated matching PLDAPS ' ...
+                    'data.\n']);
             else
                 fprintf('  --> PC name does not match. Skipping.\n');
             end
         catch ME
             % Restore warning state in case of an error
             warning(warningState);
-            fprintf(2, '  Error loading or checking file %s: %s\n', matFilePath, ME.message);
+            fprintf(2, '  Error loading or checking file %s: %s\n', ...
+                matFilePath, ME.message);
         end
         % Restore the original warning state after successful loading
         warning(warningState);
@@ -173,11 +184,13 @@ end
 % Final error handling after checking all candidates
 if isempty(valid_p_structs)
     keyboard
-    fprintf('ERROR: No matching PLDAPS data (file or directory) found for date %s and PC %s.\n', job.date, job.experiment_pc_name);
+    fprintf(['ERROR: No matching PLDAPS data (file or directory) found ' ...
+        'for date %s and PC %s.\n'], job.date, job.experiment_pc_name);
     return;
 end
 
-fprintf('Found %d candidate PLDAPS files. Removing duplicates...\n', numel(valid_paths));
+fprintf('Found %d candidate PLDAPS files. Removing duplicates...\n', ...
+    numel(valid_paths));
 [~, unique_indices] = unique(valid_paths);
 
 valid_paths = valid_paths(unique_indices);
@@ -188,7 +201,8 @@ fprintf('Found %d unique PLDAPS files.\n', numel(valid_paths));
 
 % If multiple PLDAPS files were found, sort them chronologically and merge
 if numel(valid_p_structs) > 1
-    fprintf('Multiple PLDAPS files found. Sorting chronologically before merging...\n');
+    fprintf(['Multiple PLDAPS files found. Sorting chronologically ' ...
+        'before merging...\n']);
 
     % Extract timestamps from filenames (e.g., from '_tHHMM_')
     timestamps = nan(1, numel(valid_paths));
@@ -198,7 +212,9 @@ if numel(valid_p_structs) > 1
         if ~isempty(token)
             timestamps(i) = str2double(token{1});
         else
-            fprintf('  Warning: Could not find _tHHMM_ timestamp in "%s". Using file modification date as a fallback.\n', filename);
+            fprintf(['  Warning: Could not find _tHHMM_ timestamp in ' ...
+                '"%s". Using file modification date as a fallback.\n'], ...
+                filename);
             fileInfo = dir(valid_paths{i});
             if ~isempty(fileInfo)
                 timestamps(i) = fileInfo.datenum;
@@ -213,7 +229,8 @@ if numel(valid_p_structs) > 1
         valid_paths = valid_paths(sort_idx);
         fprintf('  Files sorted. Merging...\n');
     else
-        fprintf('  Warning: Could not determine chronological order. Merging in default order.\n');
+        fprintf(['  Warning: Could not determine chronological order. ' ...
+            'Merging in default order.\n']);
     end
 
     % B. Discover All Field Names
@@ -223,11 +240,13 @@ if numel(valid_p_structs) > 1
     for i = 1:numel(valid_p_structs)
         s = valid_p_structs{i};
         if isfield(s, 'trVars') && ~isempty(s.trVars)
-            all_trVars_fields = union(all_trVars_fields, fieldnames(s.trVars));
+            all_trVars_fields = union(all_trVars_fields, ...
+                fieldnames(s.trVars));
             total_trials = total_trials + numel(s.trVars);
         end
         if isfield(s, 'trData') && ~isempty(s.trData)
-            all_trData_fields = union(all_trData_fields, fieldnames(s.trData));
+            all_trData_fields = union(all_trData_fields, ...
+                fieldnames(s.trData));
         end
     end
 
@@ -270,7 +289,8 @@ if numel(valid_p_structs) > 1
             for f = 1:numel(all_trVars_fields)
                 field = all_trVars_fields{f};
                 if isfield(s.trVars, field)
-                    p_data.trVars(current_trial_idx).(field) = s.trVars(j).(field);
+                    p_data.trVars(current_trial_idx).(field) = ...
+                        s.trVars(j).(field);
                 end
             end
 
@@ -279,14 +299,16 @@ if numel(valid_p_structs) > 1
                 for f = 1:numel(all_trData_fields)
                     field = all_trData_fields{f};
                     if isfield(s.trData, field)
-                        p_data.trData(current_trial_idx).(field) = s.trData(j).(field);
+                        p_data.trData(current_trial_idx).(field) = ...
+                            s.trData(j).(field);
                     end
                 end
             end
         end
         trial_offset = trial_offset + num_trials_in_struct;
     end
-    fprintf('  %d files merged into a single data structure with %d total trials.\n', numel(valid_p_structs), total_trials);
+    fprintf(['  %d files merged into a single data structure with %d ' ...
+        'total trials.\n'], numel(valid_p_structs), total_trials);
 else
     % If only one file was found, just extract it from the cell array
     p_data = valid_p_structs{1};
@@ -295,15 +317,18 @@ end
 %% 4. Match Trials and Integrate Data
 % The new logic correctly uses p.trVars and p.trData
 nPdsTrials = numel(p_data.trVars);
-fprintf('Found %d trials in PLDAPS file. Matching with NEV trials...\n', nPdsTrials);
+fprintf(['Found %d trials in PLDAPS file. Matching with NEV ' ...
+    'trials...\n'], nPdsTrials);
 
 % After the master p_data struct is created (at the end of Phase 1), extract
 % all PLDAPS trial strobes into a clean cell array. Ensure they are column
 % vectors for consistent comparison.
-pds_strobes = arrayfun(@(x) x.strobed(:), p_data.trData, 'UniformOutput', false);
+pds_strobes = arrayfun(@(x) x.strobed(:), p_data.trData, ...
+    'UniformOutput', false);
 
 % Create the NEV-to-PLDAPS Mapping
-fprintf('Aligning NEV and PLDAPS trials via exhaustive strobe search...\n');
+fprintf(['Aligning NEV and PLDAPS trials via exhaustive strobe ' ...
+    'search...\n']);
 nev_to_pds_map = nan(nNevTrials, 1);
 
 % Now, implement the cellfun mapping logic. Loop through each NEV trial,
@@ -312,15 +337,46 @@ for i = 1:nNevTrials
     nev_strobe_vector = eventValuesTrials{i}(:);
 
     % Use cellfun to find a match in the PLDAPS strobes
-    match_idx = find(cellfun(@(x) isequal(x, nev_strobe_vector), pds_strobes), 1);
+    match_idx = find(cellfun(@(x) isequal(x, nev_strobe_vector), ...
+        pds_strobes), 1);
+    
+    % If we don't find a match, try again using the nev_strobe_vector with
+    % '30009' added to the end (trialEnd)
+    if isempty(match_idx) && nev_strobe_vector(end) ~= 30009
+        % apparently we may have cases in which the final value of the
+        % nev_strobe_vector isn't 30009 BUT one of the earlier values IS
+        % 30009. It's even more complicated than that, unfortunately,
+        % because sometimes there are TWO trialEnd strobes :(. I think this
+        % approach can still work though.
+        match_idx = find(cellfun(@(x) isequal(x, ...
+           [nev_strobe_vector; 30009]), ...
+        pds_strobes), 1);
+    end
 
+    % If we STILL don't find a match, try again using the
+    % nev_strobe_vector limited to the 1st value up to the '30009'
+    if isempty(match_idx) && nnz(nev_strobe_vector == 30009) == 1
+        % apparently we may have cases in which the final value of the
+        % nev_strobe_vector isn't 30009 BUT one of the earlier values IS
+        % 30009. It's even more complicated than that, unfortunately,
+        % because sometimes there are TWO trialEnd strobes :(. I think this
+        % approach can still work though.
+        match_idx = find(cellfun(@(x) isequal(x, ...
+           nev_strobe_vector(1:find(nev_strobe_vector == 30009))), ...
+        pds_strobes), 1);
+    end
+
+    % If we have a match, add it to the nev_to_pds_map
     if ~isempty(match_idx)
         nev_to_pds_map(i) = match_idx;
+    else
+        keyboard
     end
 end
 
 nMatchedTrials = sum(~isnan(nev_to_pds_map));
-fprintf('Found %d matched trials between NEV and PLDAPS data.\n', nMatchedTrials);
+fprintf('Found %d matched trials between NEV and PLDAPS data.\n', ...
+    nMatchedTrials);
 
 if nMatchedTrials == 0
     keyboard
@@ -333,14 +389,16 @@ allTimingFields = {};
 if isfield(p_data.trData, 'timing')
     for i = 1:nPdsTrials
         if isstruct(p_data.trData(i).timing)
-            allTimingFields = union(allTimingFields, fieldnames(p_data.trData(i).timing));
+            allTimingFields = union(allTimingFields, ...
+                fieldnames(p_data.trData(i).timing));
         end
     end
 end
 
 % --- Data-Driven Filtering of Timing Fields ---
 scalarTimingFields = {};
-fprintf('  Found %d candidate timing fields. Filtering for scalar values...\n', numel(allTimingFields));
+fprintf(['  Found %d candidate timing fields. Filtering for ' ...
+    'scalar values...\n'], numel(allTimingFields));
 
 for i = 1:numel(allTimingFields)
     fieldName = allTimingFields{i};
@@ -348,7 +406,8 @@ for i = 1:numel(allTimingFields)
     % Find the first trial that contains this timing field
     first_occurrence_trial = -1;
     for j = 1:nPdsTrials
-        if isfield(p_data.trData(j), 'timing') && isfield(p_data.trData(j).timing, fieldName)
+        if isfield(p_data.trData(j), 'timing') && ...
+            isfield(p_data.trData(j).timing, fieldName)
             first_occurrence_trial = j;
             break;
         end
@@ -356,18 +415,21 @@ for i = 1:numel(allTimingFields)
 
     % If the field was found, check if its value is scalar in that trial
     if first_occurrence_trial > 0
-        fieldValue = p_data.trData(first_occurrence_trial).timing.(fieldName);
+        fieldValue = p_data.trData(first_occurrence_trial).timing.( ...
+            fieldName);
         if isscalar(fieldValue)
             scalarTimingFields{end+1} = fieldName;
         else
-            fprintf('  --> Filtering out non-scalar timing field: %s (size: %s)\n', ...
+            fprintf(['  --> Filtering out non-scalar timing field: %s ' ...
+                '(size: %s)\n'], ...
                     fieldName, mat2str(size(fieldValue)));
         end
     end
 end
 
 % Pre-allocate dynamically discovered fields in eventTimes
-fprintf('  Pre-allocating %d dynamically discovered timing fields...\n', numel(scalarTimingFields));
+fprintf(['  Pre-allocating %d dynamically discovered timing ' ...
+    'fields...\n'], numel(scalarTimingFields));
 for f = 1:numel(scalarTimingFields)
     fieldName = scalarTimingFields{f};
     pdsFieldName = ['pds' upper(fieldName(1)) fieldName(2:end)];
@@ -375,7 +437,7 @@ for f = 1:numel(scalarTimingFields)
 end
 
 
-% --- Analyze PLDAPS fields for consistent sizing and pre-allocate trialInfo ---
+% Analyze PLDAPS fields for consistent sizing and pre-allocate trialInfo 
 fprintf('Analyzing PLDAPS fields and pre-allocating trialInfo table...\n');
 
 % --- Analysis and Pre-allocation for trVars ---
@@ -384,7 +446,8 @@ if isfield(p_data, 'trVars') && ~isempty(p_data.trVars)
     allTrVarsFields = {};
     % Discover all unique fields from all trials first
     for i = 1:numel(p_data.trVars)
-        allTrVarsFields = union(allTrVarsFields, fieldnames(p_data.trVars(i)));
+        allTrVarsFields = union(allTrVarsFields, fieldnames( ...
+            p_data.trVars(i)));
     end
 
     % Analyze each field and pre-allocate
@@ -418,12 +481,13 @@ if isfield(p_data, 'trVars') && ~isempty(p_data.trVars)
                         break; % Not numeric, so it must be a cell array
                     end
 
-                    % If this is the first non-empty value, set it as the reference
+                    % If this is the first non-empty value, set it as 
+                    % the reference
                     if ~first_val_found
                         first_size = size(val);
                         first_val_found = true;
                     else
-                        % Compare subsequent non-empty values to the reference
+                        % Compare subsequent non-empty values to the ref
                         if ~isequal(size(val), first_size)
                             is_consistent = false;
                             break; % Inconsistent size, must be a cell array
@@ -452,14 +516,16 @@ if isfield(p_data, 'trData') && ~isempty(p_data.trData)
     allTrDataFields = {};
     % Discover all unique fields from all trials first
     for i = 1:numel(p_data.trData)
-        allTrDataFields = union(allTrDataFields, fieldnames(p_data.trData(i)));
+        allTrDataFields = union(allTrDataFields, fieldnames( ...
+            p_data.trData(i)));
     end
 
     % Analyze each field and pre-allocate
-    existingTrialInfoFields = fieldnames(trialInfo); % Update with fields from trVars
+    existingTrialInfoFields = fieldnames(trialInfo);
     for f = 1:numel(allTrDataFields)
         fieldName = allTrDataFields{f};
-        if ismember(fieldName, existingTrialInfoFields) || strcmp(fieldName, 'timing')
+        if ismember(fieldName, existingTrialInfoFields) || ...
+            strcmp(fieldName, 'timing')
             continue;
         end
 
@@ -515,7 +581,7 @@ if isfield(p_data, 'trData') && ~isempty(p_data.trData)
 end
 
 
-% New, robust integration loop
+% Integration loop
 for nevIdx = 1:nNevTrials
     pdsIdx = nev_to_pds_map(nevIdx);
 
@@ -530,9 +596,10 @@ for nevIdx = 1:nNevTrials
                     trialInfo.(fieldName){nevIdx} = dataValue;
                 else
                     if isempty(dataValue)
-                        trialInfo.(fieldName)(nevIdx, :) = nan(1, size(trialInfo.(fieldName), 2));
+                        trialInfo.(fieldName)(nevIdx, :) = nan(1, ...
+                            size(trialInfo.(fieldName), 2));
                     else
-                        trialInfo.(fieldName)(nevIdx, :) = dataValue(:)'; % Ensure row vector
+                        trialInfo.(fieldName)(nevIdx, :) = dataValue(:)';
                     end
                 end
             end
@@ -547,9 +614,10 @@ for nevIdx = 1:nNevTrials
                     trialInfo.(fieldName){nevIdx} = dataValue;
                 else
                     if isempty(dataValue)
-                        trialInfo.(fieldName)(nevIdx, :) = nan(1, size(trialInfo.(fieldName), 2));
+                        trialInfo.(fieldName)(nevIdx, :) = nan(1, ...
+                            size(trialInfo.(fieldName), 2));
                     else
-                        trialInfo.(fieldName)(nevIdx, :) = dataValue(:)'; % Ensure row vector
+                        trialInfo.(fieldName)(nevIdx, :) = dataValue(:)';
                     end
                 end
             end
@@ -563,10 +631,13 @@ for nevIdx = 1:nNevTrials
             timingFields = fieldnames(timingData);
 
             for t = 1:numel(timingFields)
-                pdsFieldName = ['pds' upper(timingFields{t}(1)) timingFields{t}(2:end)];
-                % Ensure the field was pre-allocated to avoid typos causing errors
+                pdsFieldName = ['pds' upper(timingFields{t}(1)) ...
+                    timingFields{t}(2:end)];
+                % Ensure the field was pre-allocated to avoid typos causing
+                % errors
                 if isfield(eventTimes, pdsFieldName)
-                    eventTimes.(pdsFieldName)(nevIdx) = timingData.(timingFields{t});
+                    eventTimes.(pdsFieldName)(nevIdx) = timingData.( ...
+                        timingFields{t});
                 end
             end
         end
@@ -576,6 +647,7 @@ end
 %% 4.5 Timestamp Correction for gSac_4factors
 % This section corrects for timestamp drift in the gSac_4factors task
 % by using data from other, more reliable tasks within the same session.
+
 
 % Initialize event code definitions
 codes = utils.initCodes;
@@ -592,10 +664,16 @@ if any(is_gsac_4factors_trial)
 
     if ~isempty(good_trial_indices)
 
+        % which trials have 'trialBegin'?
+        hasTrialBegin = arrayfun(@(x)isfield(x.timing,'trialBegin'), ...
+            p_data.trData);
+
         % Collect paired timestamps from good trials. First define vectors
         % of trial start times from PTB and from NEV, then select values
         % from non-gSac_4factors trials:
         trialStartPTB = arrayfun(@(x)x.timing.trialStartPTB, ...
+            p_data.trData);
+        trialBegin = arrayfun(@(x)x.timing.trialBegin, ...
             p_data.trData);
         pldaps_times = trialStartPTB(nev_to_pds_map(good_trial_indices));
         ripple_times = eventTimes.trialBegin(good_trial_indices);
@@ -640,14 +718,23 @@ if any(is_gsac_4factors_trial)
             end
 
             % Save the figure
-            plotFileName = fullfile(diagnosticsDir, job.unique_id + "_timestamp_fit.png");
+            plotFileName = fullfile(diagnosticsDir, job.unique_id + ...
+                "_timestamp_fit.png");
             saveas(gcf, plotFileName);
             close(gcf); % Close the figure after saving
 
             % Define the mapping from target NEV fields to source PLDAPS fields
             target_to_source_map = containers.Map(...
-                {'CUE_ON', 'fixAq', 'fixBreak', 'fixOff', 'fixOn', 'joyPress', 'lowTone', 'reward', 'REWARD_GIVEN', 'saccadeOffset', 'saccadeOnset', 'targetAq', 'targetOff', 'targetOn', 'targetReillum', 'trialEnd', 'TRIAL_END'}, ...
-                {'pdsCueOn', 'pdsFixAq', 'pdsBrokeFix', 'pdsFixOff', 'pdsFixOn', 'pdsJoyPress', 'pdsTone', 'pdsReward', 'pdsReward', 'pdsSaccadeOffset', 'pdsSaccadeOnset', 'pdsTargetAq', 'pdsTargetOff', 'pdsTargetOn', 'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd'} ...
+                {'CUE_ON', 'fixAq', 'fixBreak', 'fixOff', 'fixOn', ...
+                'joyPress', 'lowTone', 'reward', 'REWARD_GIVEN', ...
+                'saccadeOffset', 'saccadeOnset', 'targetAq', ...
+                'targetOff', 'targetOn', 'targetReillum', 'trialEnd', ...
+                'TRIAL_END'}, ...
+                {'pdsCueOn', 'pdsFixAq', 'pdsBrokeFix', 'pdsFixOff', ...
+                'pdsFixOn', 'pdsJoyPress', 'pdsTone', 'pdsReward', ...
+                'pdsReward', 'pdsSaccadeOffset', 'pdsSaccadeOnset', ...
+                'pdsTargetAq', 'pdsTargetOff', 'pdsTargetOn', ...
+                'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd'} ...
             );
 
             % Define NEV fields to be nulled
@@ -659,9 +746,13 @@ if any(is_gsac_4factors_trial)
                 nevIdx = gsac_indices(i);
                 pdsIdx = nev_to_pds_map(nevIdx);
 
-                if ~isnan(pdsIdx) && isfield(p_data.trData(pdsIdx), 'timing') && isfield(p_data.trData(pdsIdx).timing, 'trialStartPTB')
-                    pds_start_time = p_data.trData(pdsIdx).timing.trialStartPTB;
-                    corrected_nev_start = polyval(mapping_params, pds_start_time, [], mu);
+                if ~isnan(pdsIdx) && isfield(p_data.trData(pdsIdx), ...
+                        'timing') && isfield(p_data.trData( ...
+                        pdsIdx).timing, 'trialStartPTB')
+                    pds_start_time = p_data.trData( ...
+                        pdsIdx).timing.trialStartPTB;
+                    corrected_nev_start = polyval(mapping_params, ...
+                        pds_start_time, [], mu);
 
                     % Overwrite the faulty trialBegin timestamp
                     eventTimes.trialBegin(nevIdx) = corrected_nev_start;
@@ -673,19 +764,27 @@ if any(is_gsac_4factors_trial)
                         source_field = target_to_source_map(target_field);
 
                         if isfield(eventTimes, source_field)
-                            % Retrieve the relative event time from the PLDAPS data
-                            relative_time = eventTimes.(source_field)(nevIdx);
+                            % Retrieve the relative event time from the 
+                            % PLDAPS data
+                            relative_time = eventTimes.(source_field)( ...
+                                nevIdx);
 
                             if ~isnan(relative_time)
-                                % Calculate the absolute event time in the PLDAPS time base
-                                absolute_pds_time = pds_start_time + relative_time;
+                                % Calculate the absolute event time in the
+                                %  PLDAPS time base
+                                absolute_pds_time = pds_start_time + ...
+                                    relative_time;
 
-                                % Apply the full linear transformation to get the corrected time in the Ripple time base
-                                corrected_absolute_time = polyval(mapping_params, absolute_pds_time, [], mu);
+                                % Apply the full linear transformation to 
+                                % get the corrected time in the Ripple time base
+                                corrected_absolute_time = polyval( ...
+                                    mapping_params, absolute_pds_time, ...
+                                        [], mu);
 
                                 % Overwrite the timestamp in the target field
                                 if isfield(eventTimes, target_field)
-                                    eventTimes.(target_field)(nevIdx) = corrected_absolute_time;
+                                    eventTimes.(target_field)(nevIdx) = ...
+                                        corrected_absolute_time;
                                 end
                             end
                         end
@@ -700,15 +799,19 @@ if any(is_gsac_4factors_trial)
                     end
                 end
             end
-            fprintf('Timestamp correction applied to %d gSac_4factors trials.\n', length(gsac_indices));
+            fprintf(['Timestamp correction applied to %d ' ...
+                'gSac_4factors trials.\n'], length(gsac_indices));
         else
-            warning('Not enough reliable trials to build a timestamp correction model for session %s.', job.unique_id);
+            warning(['Not enough reliable trials to build a timestamp ' ...
+                'correction model for session %s.'], job.unique_id);
         end
     else
-        warning('No reliable trials found to build a timestamp correction model for session %s.', job.unique_id);
+        warning(['No reliable trials found to build a timestamp ' ...
+            'correction model for session %s.'], job.unique_id);
     end
 else
-    fprintf('No gSac_4factors trials found in this session. Skipping timestamp correction.\n');
+    fprintf(['No gSac_4factors trials found in this session. ' ...
+        'Skipping timestamp correction.\n']);
 end
 
 
@@ -718,13 +821,17 @@ outputFilePath = fullfile(intermediateDir, outputFileName);
 
 fprintf('Saving intermediate data to: %s\n', outputFilePath);
 try
-    save(outputFilePath, 'trialInfo', 'eventTimes', 'eventValuesTrials', '-v7.3');
+    save(outputFilePath, 'trialInfo', 'eventTimes', ...
+        'eventValuesTrials', '-v7.3');
     success = true;
     fprintf('Successfully created intermediate data file.\n');
 catch ME
-    fprintf(2, 'ERROR during behavioral data preparation for %s:\n', job.unique_id); % Print error in red
+    fprintf(2, 'ERROR during behavioral data preparation for %s:\n', ...
+        job.unique_id); % Print error in red
     fprintf(2, '%s\n', ME.message);
-    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    warning(['Execution paused in the debugger. Inspect variables ' ...
+        '(ME, job, config) and type ''dbcont'' to continue to the ' ...
+        'next job or ''dbquit'' to exit.']);
     keyboard; % Pause execution for debugging
     success = false;
 end

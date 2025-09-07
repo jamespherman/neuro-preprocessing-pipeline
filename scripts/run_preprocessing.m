@@ -36,17 +36,22 @@ for i = 1:height(jobs)
             fprintf('Beginning spike data preparation...\n');
             success = prep.prepare_spikes_for_kilosort(job, config);
             if success
-                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'dat_status');
+                utils.update_manifest_status(manifest_path, ...
+                    job.unique_id, 'complete', 'dat_status');
                 job.dat_status = "complete"; % Update local job variable
                 fprintf('Spike data preparation successful.\n');
             else
-                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'dat_status');
+                utils.update_manifest_status(manifest_path, ...
+                    job.unique_id, 'error', 'dat_status');
             end
         catch ME
-            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'dat_status');
-    fprintf(2, 'ERROR during spike prep for %s:\n', job.unique_id); % Print error in red
+            utils.update_manifest_status(manifest_path, job.unique_id, ...
+                'error', 'dat_status');
+    fprintf(2, 'ERROR during spike prep for %s:\n', job.unique_id);
     fprintf(2, '%s\n', ME.message);
-    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    warning(['Execution paused in the debugger. Inspect variables ' ...
+        '(ME, job, config) and type ''dbcont'' to continue to the ' ...
+        '        next job or ''dbquit'' to exit.']);
     keyboard; % Pause execution for debugging
         end
     end
@@ -57,29 +62,38 @@ for i = 1:height(jobs)
             fprintf('Beginning behavioral data preparation...\n');
             success = prep.prepare_behavioral_data(job, config);
             if success
-                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'behavior_status');
-                job.behavior_status = "complete"; % Update local job variable
+                utils.update_manifest_status(manifest_path, ...
+                    job.unique_id, 'complete', 'behavior_status');
+                job.behavior_status = "complete";
                 fprintf('Behavioral data preparation successful.\n');
             else
-                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'behavior_status');
+                utils.update_manifest_status(manifest_path, ...
+                    job.unique_id, 'error', 'behavior_status');
             end
         catch ME
-            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'behavior_status');
-    fprintf(2, 'ERROR during behavioral prep for %s:\n', job.unique_id); % Print error in red
+            utils.update_manifest_status(manifest_path, job.unique_id, ...
+                'error', 'behavior_status');
+    fprintf(2, 'ERROR during behavioral prep for %s:\n', ...
+        job.unique_id); % Print error in red
     fprintf(2, '%s\n', ME.message);
-    warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue to the next job or ''dbquit'' to exit.');
+    warning(['Execution paused in the debugger. Inspect variables ' ...
+        '        (ME, job, config) and type ''dbcont'' ' ...
+        '        to continue to the next job or ''dbquit'' to exit.']);
     keyboard; % Pause execution for debugging
         end
     end
 
     % --- 3. Automated Kilosort Status Check ---
     if strcmp(job.kilosort_status, "pending")
-        kilosortJobDir = fullfile(config.processedDataDir, job.unique_id);
-        kilosortCompletionFile = fullfile(kilosortJobDir, 'spike_times.npy');
+        kilosortJobDir = fullfile(config.processedDataDir, ...
+            job.unique_id);
+        kilosortCompletionFile = fullfile(kilosortJobDir, ...
+            'spike_times.npy');
         if isfile(kilosortCompletionFile)
             fprintf('Kilosort output detected.\n');
-            utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'kilosort_status');
-            job.kilosort_status = "complete"; % Update local job variable
+            utils.update_manifest_status(manifest_path, ...
+                job.unique_id, 'complete', 'kilosort_status');
+            job.kilosort_status = "complete";
         end
     end
 
@@ -92,17 +106,23 @@ for i = 1:height(jobs)
             fprintf('Beginning waveform extraction...\n');
             success = consolidate.extract_waveforms(job, config);
             if success
-                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'waveform_status');
-                job.waveform_status = "complete"; % Update local job variable
+                utils.update_manifest_status(manifest_path, ...
+                    job.unique_id, 'complete', 'waveform_status');
+                job.waveform_status = "complete";
                 fprintf('Waveform extraction successful.\n');
             else
-                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'waveform_status');
+                utils.update_manifest_status(manifest_path, ...
+                    job.unique_id, 'error', 'waveform_status');
             end
         catch ME
-            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'waveform_status');
-            fprintf(2, 'ERROR during waveform extraction for %s:\n', job.unique_id);
+            utils.update_manifest_status(manifest_path, job.unique_id, ...
+                'error', 'waveform_status');
+            fprintf(2, 'ERROR during waveform extraction for %s:\n', ...
+                job.unique_id);
             fprintf(2, '%s\n', ME.message);
-            warning('Execution paused in the debugger. Inspect variables and type ''dbcont'' to continue.');
+            warning(['Execution paused in the debugger. Inspect ' ...
+                '                variables and type ''dbcont'' ' ...
+                '                to continue.']);
             keyboard;
         end
     end
@@ -118,17 +138,22 @@ for i = 1:height(jobs)
             fprintf('Beginning final data consolidation...\n');
             success = consolidate.consolidate_data(job, config);
             if success
-                utils.update_manifest_status(manifest_path, job.unique_id, 'complete', 'consolidation_status');
+                utils.update_manifest_status(manifest_path, ...
+                    job.unique_id, 'complete', 'consolidation_status');
                 job.consolidation_status = "complete";
                 fprintf('Data consolidation successful.\n');
             else
-                utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
+                utils.update_manifest_status(manifest_path, ...
+                    job.unique_id, 'error', 'consolidation_status');
             end
         catch ME
-            utils.update_manifest_status(manifest_path, job.unique_id, 'error', 'consolidation_status');
-            fprintf(2, 'ERROR during data consolidation for %s:\n', job.unique_id);
+            utils.update_manifest_status(manifest_path, ...
+                job.unique_id, 'error', 'consolidation_status');
+            fprintf(2, 'ERROR during data consolidation for %s:\n', ...
+                job.unique_id);
             fprintf(2, '%s\n', ME.message);
-            warning('Execution paused in the debugger. Inspect variables and type ''dbcont'' to continue.');
+            warning(['Execution paused in the debugger. Inspect ' ...
+                'variables and type ''dbcont'' to continue.']);
             keyboard;
         end
     end
