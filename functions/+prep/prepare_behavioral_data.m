@@ -365,6 +365,16 @@ for i = 1:min(100, nNevTrials)
     match_indices = find(cellfun(@(x) isequal(x, nev_strobe_vector), ...
         pds_strobes));
 
+    % if that didn't work, try the fallback using LCS:
+    if isempty(match_indices)
+
+        lcsVals = cellfun(@(x)utils.calculateLCSLength(...
+            nev_strobe_vector, x), pds_strobes);
+        maxLcsVal = max(lcsVals);
+        match_indices = find(lcsVals == maxLcsVal);
+
+    end
+
     % We are looking for a unique, unambiguous match
     if isscalar(match_indices)
         match_idx = match_indices(1);
