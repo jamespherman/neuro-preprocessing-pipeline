@@ -749,20 +749,20 @@ if any(is_gsac_4factors_trial)
 
     if ~isempty(good_trial_indices)
 
-        % which trials have 'trialBegin'?
-        hasTrialBegin = arrayfun(@(x)isfield(x.timing,'trialBegin'), ...
-            p_data.trData);
+        % Collect paired timestamps from good, reliable trials to build the model
+        pds_trial_begin_times = eventTimes.pdsTrialBegin(good_trial_indices);
+        pds_trial_start_ptb_times = eventTimes.pdsTrialStartPTB(good_trial_indices);
 
-        % Collect paired timestamps from good trials. First define vectors
-        % of trial start times from PTB and from NEV, then select values
-        % from non-gSac_4factors trials:
-        trialStartPTB = arrayfun(@(x)x.timing.trialStartPTB, ...
-            p_data.trData);
-        trialBegin = arrayfun(@(x)x.timing.trialBegin, ...
-            p_data.trData);
-        pldaps_times = trialStartPTB(nev_to_pds_map(good_trial_indices));
+        % The X-variable is the absolute time of the 'trialBegin' strobe
+        % on the PLDAPS clock.
+        pldaps_times = pds_trial_start_ptb_times + pds_trial_begin_times;
         ripple_times = eventTimes.trialBegin(good_trial_indices);
         
+        % Remove any pairs with NaN values to ensure polyfit works correctly
+        nan_mask = isnan(pldaps_times) | isnan(ripple_times);
+        pldaps_times(nan_mask) = [];
+        ripple_times(nan_mask) = [];
+
         % Ensure we have enough points to build a model
         if numel(pldaps_times) > 1
             % Compute the linear mapping. Note that by requesting the 3rd
@@ -813,12 +813,12 @@ if any(is_gsac_4factors_trial)
                 'joyPress', 'lowTone', 'reward', 'REWARD_GIVEN', ...
                 'saccadeOffset', 'saccadeOnset', 'targetAq', ...
                 'targetOff', 'targetOn', 'targetReillum', 'trialEnd', ...
-                'TRIAL_END'}, ...
+                'TRIAL_END', 'trialBegin'}, ...
                 {'pdsCueOn', 'pdsFixAq', 'pdsBrokeFix', 'pdsFixOff', ...
                 'pdsFixOn', 'pdsJoyPress', 'pdsTone', 'pdsReward', ...
                 'pdsReward', 'pdsSaccadeOffset', 'pdsSaccadeOnset', ...
                 'pdsTargetAq', 'pdsTargetOff', 'pdsTargetOn', ...
-                'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd'} ...
+                'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd', 'pdsTrialBegin'} ...
             );
 
             % Define NEV fields to be nulled
@@ -835,11 +835,6 @@ if any(is_gsac_4factors_trial)
                         pdsIdx).timing, 'trialStartPTB')
                     pds_start_time = p_data.trData( ...
                         pdsIdx).timing.trialStartPTB;
-                    corrected_nev_start = polyval(mapping_params, ...
-                        pds_start_time, [], mu);
-
-                    % Overwrite the faulty trialBegin timestamp
-                    eventTimes.trialBegin(nevIdx) = corrected_nev_start;
 
                     % Loop through the keys of the mapping
                     target_fields = keys(target_to_source_map);
