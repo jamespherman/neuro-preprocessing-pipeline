@@ -392,43 +392,47 @@ if anchor_nev_idx < nNevTrials
     for i = (anchor_nev_idx + 1):nNevTrials
         target_count = trialInfo.trialCount(i);
 
-        % Skip if NEV trial is missing a trialCount
+        % Skip if the NEV trial is missing a trialCount value
         if isnan(target_count)
             continue;
         end
-        
-        max_retries = 3;
-        search_window_size = 20;
-        
-        for retry = 1:max_retries
-            search_start_idx = last_match_pds_idx + 1;
-            search_end_idx = min(search_start_idx + search_window_size ...
-                - 1, nPdsTrials);
 
-            if search_start_idx > nPdsTrials
-                break; % Stop if we've exhausted all PDS trials
-            end
+        % Define the starting point for this trial's search
+        search_start_idx = last_match_pds_idx + 1;
 
-            search_range = search_start_idx:search_end_idx;
-
-            % Find the first occurrence of target_count in the window
-            relative_idx = find(pds_trialCount(search_range) == ...
-                target_count, 1);
-
-            if ~isempty(relative_idx)
-                % Convert relative index to absolute PDS trial index
-                match_pds_idx = search_range(relative_idx);
-
-                nev_to_pds_map(i) = match_pds_idx;
-                last_match_pds_idx = match_pds_idx;
-                break; % Match found, exit the retry loop
-            else
-                % If no match, expand the window for the next retry
-                search_window_size = search_window_size * 2;
-            end
+        if search_start_idx > nPdsTrials
+            break; % Stop if we've exhausted all PDS trials
         end
-        % If the loop finishes without a match, nev_to_pds_map(i) remains 
-        % NaN
+
+        % Find the end of the current monotonic block of PDS trials
+        temp_range = pds_trialCount(search_start_idx:end);
+        % A reset is the first point where the trial count decreases
+        reset_point_relative = find(diff(temp_range) < 0, 1);
+
+        if isempty(reset_point_relative)
+            % No more resets are found; search to the end of the data
+            search_end_idx = nPdsTrials;
+        else
+            % A reset was found; the search range ends just before it
+            search_end_idx = search_start_idx + reset_point_relative - 1;
+        end
+
+        search_range = search_start_idx:search_end_idx;
+
+        % Find the first occurrence of target_count within the monotonic block
+        relative_idx = find(pds_trialCount(search_range) == target_count, 1);
+
+        if ~isempty(relative_idx)
+            % A match was found. Convert its relative index to an absolute index.
+            match_pds_idx = search_range(relative_idx);
+
+            % Assign the match and update the pointer for the next search
+            nev_to_pds_map(i) = match_pds_idx;
+            last_match_pds_idx = match_pds_idx;
+        end
+        % If no match is found, nev_to_pds_map(i) remains NaN, and the
+        % last_match_pds_idx is NOT updated, allowing the next search to
+        % start from the same block to skip NEV trial fragments.
     end
 end
 
@@ -749,39 +753,61 @@ if any(is_gsac_4factors_trial)
 
     if ~isempty(good_trial_indices)
 
-        % Collect paired timestamps from good, reliable trials to build the model
-        pds_trial_begin_times = eventTimes.pdsTrialBegin(good_trial_indices);
-        pds_trial_start_ptb_times = eventTimes.pdsTrialStartPTB(good_trial_indices);
+        % Collect paired timestamps from good, reliable trials to build the 
+        % model
+        pds_trial_end_times = eventTimes.pdsTrialEnd(good_trial_indices);
+        pds_trial_start_ptb_times = eventTimes.pdsTrialStartPTB( ...
+            good_trial_indices);
 
-        % The X-variable is the absolute time of the 'trialBegin' strobe
-        % on the PLDAPS clock.
-        pldaps_times = pds_trial_start_ptb_times + pds_trial_begin_times;
-        ripple_times = eventTimes.trialBegin(good_trial_indices);
-        
-        % Remove any pairs with NaN values to ensure polyfit works correctly
+        % The X-variable is the absolute time of the 'trialEnd' strobe on 
+        % the PLDAPS clock.
+        pldaps_times = pds_trial_start_ptb_times + pds_trial_end_times;
+        ripple_times = eventTimes.trialEnd(good_trial_indices);
+
+        % Remove any pairs with NaN values before proceeding
         nan_mask = isnan(pldaps_times) | isnan(ripple_times);
         pldaps_times(nan_mask) = [];
         ripple_times(nan_mask) = [];
 
-        % Ensure we have enough points to build a model
-        if numel(pldaps_times) > 1
-            % Compute the linear mapping. Note that by requesting the 3rd
-            % output argument 'mu' we request that polyfit center and scale
-            % the X data before computing the mapping so we must pass 'mu'
-            % back to 'polyval' as well:
-            [mapping_params, stats, mu] = polyfit(pldaps_times, ...
+        if numel(pldaps_times) > 1 % Ensure enough points for robust 
+            % fitting
+            % --- Outlier Removal ---
+            % First pass: Fit a model to all data to find outliers
+            [p_initial, ~, mu_initial] = polyfit(pldaps_times, ...
                 ripple_times, 1);
+            predicted_ripple_initial = polyval(p_initial, pldaps_times, ...
+                [], mu_initial);
+            residuals = ripple_times - predicted_ripple_initial;
 
-            % Verification of the fit
-            predicted_ripple_times = polyval(mapping_params, ...
-                pldaps_times, [], mu);
-            residuals = ripple_times - predicted_ripple_times;
+            % Identify outliers as points with residuals > 3 standard 
+            % deviations from the mean
+            outlier_threshold = 3 * std(residuals);
+            is_outlier = abs(residuals) > outlier_threshold;
 
-            if max(abs(residuals)) > 0.001 % 1 ms threshold
-                warning(['Timestamp correction fit is ' ...
-                    'poor for session %s. Max residual: %.4f s'], ...
-                    job.unique_id, max(abs(residuals)));
+            if any(is_outlier)
+                fprintf(['  --> Detected and removed %d outlier(s) ' ...
+                    'from timestamp fit.\n'], ...
+                    nnz(is_outlier));
             end
+
+            % Second pass: Create the final model using only the clean 
+            % "inlier" data
+            pldaps_times_clean = pldaps_times(~is_outlier);
+            ripple_times_clean = ripple_times(~is_outlier);
+
+            % Final, robust model calculation
+            [mapping_params, stats, mu] = polyfit(pldaps_times_clean, ...
+                ripple_times_clean, 1);
+
+            % --- The rest of the logic (plotting, applying the model) 
+            % can now proceed ---
+            % Make sure to use the clean data for plotting as well.
+            predicted_ripple_times = polyval(mapping_params, ...
+                pldaps_times_clean, [], mu);
+
+            % overwrite pldaps_times and ripple_times:
+            pldaps_times = pldaps_times_clean;
+            ripple_times = ripple_times_clean;
 
             % Generate a scatter plot for visual inspection
             figure;
@@ -818,7 +844,8 @@ if any(is_gsac_4factors_trial)
                 'pdsFixOn', 'pdsJoyPress', 'pdsTone', 'pdsReward', ...
                 'pdsReward', 'pdsSaccadeOffset', 'pdsSaccadeOnset', ...
                 'pdsTargetAq', 'pdsTargetOff', 'pdsTargetOn', ...
-                'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd', 'pdsTrialBegin'} ...
+                'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd', ...
+                'pdsTrialBegin'} ...
             );
 
             % Define NEV fields to be nulled
