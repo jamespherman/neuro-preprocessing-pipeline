@@ -20,6 +20,8 @@ success = false;
 nevFile = fullfile(config.rawNeuralDataDir, job.raw_filename_base + ...
     ".nev");
 intermediateDir = fullfile(config.processedDataDir, job.unique_id);
+diagnosticsDir = fullfile(findOneDrive, 'Code', ...
+'neuro-preprocessing-pipeline', 'pipeline_output','diagnostics');
 
 % Check if the raw .nev file exists
 if ~exist(nevFile, 'file')
@@ -317,8 +319,8 @@ end
 %% 4. Match Trials and Integrate Data
 % The new logic correctly uses p.trVars and p.trData
 nPdsTrials = numel(p_data.trVars);
-fprintf(['Found %d trials in PLDAPS file. Matching with NEV ' ...
-    'trials...\n'], nPdsTrials);
+fprintf(['Found %d trials in PLDAPS file. Matching with %d NEV ' ...
+    'trials...\n'], nPdsTrials, nNevTrials);
 
 % After the master p_data struct is created (at the end of Phase 1), extract
 % all PLDAPS trial strobes into a clean cell array. Ensure they are column
@@ -335,13 +337,17 @@ nev_to_pds_map = nan(nNevTrials, 1);
 % Extract the trialCount from each pds_strobe list using a vectorized
 % approach. This is for the "Anchor-and-Step" matching method.
 codes = utils.initCodes;
-% Use cellfun with a circshift trick to find the value after the trialCount code.
-% 'UniformOutput' is false to handle cases where the code is not found,
-% which returns an empty cell.
-temp_counts = cellfun(@(x) x(circshift(x==codes.trialCount, 1)), pds_strobes, 'UniformOutput', false);
+
+% Use cellfun with a circshift trick to find the value after the trialCount
+%  code. 'UniformOutput' is false to handle cases where the code is not 
+% found, which returns an empty cell.
+temp_counts = cellfun(@(x) x(circshift(x==codes.trialCount, 1)), ...
+    pds_strobes, 'UniformOutput', false);
+
 % Replace empty cells (where trialCount was not found) with NaN.
 empty_indices = cellfun('isempty', temp_counts);
 temp_counts(empty_indices) = {NaN};
+
 % Convert the cell array back to a numeric vector.
 pds_trialCount = cell2mat(temp_counts);
 % --- End of Pre-computation ---
@@ -356,24 +362,29 @@ for i = 1:min(100, nNevTrials)
     nev_strobe_vector = eventValuesTrials{i}(:);
     
     % Find all potential matches in the entire PDS strobe list
-    match_indices = find(cellfun(@(x) isequal(x, nev_strobe_vector), pds_strobes));
+    match_indices = find(cellfun(@(x) isequal(x, nev_strobe_vector), ...
+        pds_strobes));
 
     % We are looking for a unique, unambiguous match
-    if numel(match_indices) == 1
+    if isscalar(match_indices)
         match_idx = match_indices(1);
 
         nev_to_pds_map(i) = match_idx;
         last_match_pds_idx = match_idx;
         initial_anchor_found = true;
         anchor_nev_idx = i;
-        fprintf('Anchor match found: NEV trial %d -> PDS trial %d\n', i, match_idx);
+        anchor_match_value = match_idx;
+        fprintf('Anchor match found: NEV trial %d -> PDS trial %d\n', ...
+            i, anchor_match_value);
+
         break; % Exit after finding the first solid anchor
     end
 end
 
 % If no anchor is found, we cannot reliably proceed.
 if ~initial_anchor_found
-    error('Could not find a reliable anchor match in the first 100 trials. Aborting.');
+    error(['Could not find a reliable anchor match in the first 100 ' ...
+        'trials. Aborting.']);
 end
 
 % Phase 2: Step Through Subsequent Matches via trialCount
@@ -391,7 +402,8 @@ if anchor_nev_idx < nNevTrials
         
         for retry = 1:max_retries
             search_start_idx = last_match_pds_idx + 1;
-            search_end_idx = min(search_start_idx + search_window_size - 1, nPdsTrials);
+            search_end_idx = min(search_start_idx + search_window_size ...
+                - 1, nPdsTrials);
 
             if search_start_idx > nPdsTrials
                 break; % Stop if we've exhausted all PDS trials
@@ -400,7 +412,8 @@ if anchor_nev_idx < nNevTrials
             search_range = search_start_idx:search_end_idx;
 
             % Find the first occurrence of target_count in the window
-            relative_idx = find(pds_trialCount(search_range) == target_count, 1);
+            relative_idx = find(pds_trialCount(search_range) == ...
+                target_count, 1);
 
             if ~isempty(relative_idx)
                 % Convert relative index to absolute PDS trial index
@@ -414,13 +427,37 @@ if anchor_nev_idx < nNevTrials
                 search_window_size = search_window_size * 2;
             end
         end
-        % If the loop finishes without a match, nev_to_pds_map(i) remains NaN
+        % If the loop finishes without a match, nev_to_pds_map(i) remains 
+        % NaN
     end
 end
 
+% count matched trials and report to user:
 nMatchedTrials = sum(~isnan(nev_to_pds_map));
-fprintf('Found %d matched trials between NEV and PLDAPS data.\n', ...
-    nMatchedTrials);
+fprintf('Found %d matched PDS trials out of %d NEV trials. \n', ...
+    nMatchedTrials, nNevTrials);
+
+% plot anchor-aligned trialCount from PDS & NEV for verification:
+figure('Color', 'w');
+axes('Color', 'w', 'XColor', 'k', 'YColor', 'k', 'TickDir', 'Out')
+hold on;
+plot(1:length(pds_trialCount), pds_trialCount)
+plot((1:length(trialInfo.trialCount)) + anchor_match_value, ...
+    trialInfo.trialCount)
+legObj = legend('pds trialCount', ...
+    'nev trialCount (offset by anchor match)');
+set(legObj, 'Color', 'w', 'Box', 'Off', 'TextColor', 'k')
+hold off;
+xlabel('Row')
+ylabel('Trial Count')
+title(sprintf('%d matched PDS trials out of %d NEV trials', ...
+    nMatchedTrials, nNevTrials), 'Color', 'k')
+
+% Save the figure
+plotFileName = fullfile(diagnosticsDir, job.unique_id + ...
+    "_trialCount_alignment.png");
+saveas(gcf, plotFileName);
+close(gcf); % Close the figure after saving
 
 if nMatchedTrials == 0
     keyboard
@@ -697,14 +734,18 @@ end
 codes = utils.initCodes;
 
 % Identify all gSac_4factors trials
-is_gsac_4factors_trial = trialInfo.taskCode == codes.uniqueTaskCode_gSac_4factors;
+is_gsac_4factors_trial = trialInfo.taskCode == ...
+    codes.uniqueTaskCode_gSac_4factors;
 
 % If gSac_4factors trials are present, proceed with correction
 if any(is_gsac_4factors_trial)
-    fprintf('Found gSac_4factors trials. Applying timestamp correction...\n');
+    fprintf(['Found gSac_4factors trials. Applying timestamp ' ...
+        'correction...\n']);
 
-    % Identify "good" trials for building the model (i.e., non-gSac_4factors trials)
-    good_trial_indices = find(~is_gsac_4factors_trial & ~isnan(nev_to_pds_map));
+    % Identify "good" trials for building the model (i.e., 
+    % non-gSac_4factors trials)
+    good_trial_indices = find(~is_gsac_4factors_trial & ...
+        ~isnan(nev_to_pds_map));
 
     if ~isempty(good_trial_indices)
 
@@ -755,19 +796,18 @@ if any(is_gsac_4factors_trial)
             grid on;
 
             % Create diagnostics directory if it doesn't exist
-            diagnosticsDir = fullfile(config.processedDataDir, ...
-                job.unique_id, 'diagnostics');
             if ~exist(diagnosticsDir, 'dir')
                 mkdir(diagnosticsDir);
             end
 
             % Save the figure
             plotFileName = fullfile(diagnosticsDir, job.unique_id + ...
-                "_timestamp_fit.png");
+                "_timestamp_fit.pdf");
             saveas(gcf, plotFileName);
             close(gcf); % Close the figure after saving
 
-            % Define the mapping from target NEV fields to source PLDAPS fields
+            % Define the mapping from target NEV fields to source PLDAPS 
+            % fields
             target_to_source_map = containers.Map(...
                 {'CUE_ON', 'fixAq', 'fixBreak', 'fixOff', 'fixOn', ...
                 'joyPress', 'lowTone', 'reward', 'REWARD_GIVEN', ...
@@ -820,12 +860,14 @@ if any(is_gsac_4factors_trial)
                                     relative_time;
 
                                 % Apply the full linear transformation to 
-                                % get the corrected time in the Ripple time base
+                                % get the corrected time in the Ripple time 
+                                % base
                                 corrected_absolute_time = polyval( ...
                                     mapping_params, absolute_pds_time, ...
                                         [], mu);
 
-                                % Overwrite the timestamp in the target field
+                                % Overwrite the timestamp in the target 
+                                % field
                                 if isfield(eventTimes, target_field)
                                     eventTimes.(target_field)(nevIdx) = ...
                                         corrected_absolute_time;
@@ -857,7 +899,6 @@ else
     fprintf(['No gSac_4factors trials found in this session. ' ...
         'Skipping timestamp correction.\n']);
 end
-
 
 %% 5. Save Intermediate File
 outputFileName = sprintf('%s_intermediate_data.mat', job.unique_id);
