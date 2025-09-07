@@ -330,86 +330,92 @@ pds_strobes = arrayfun(@(x) x.strobed(:), p_data.trData, ...
 fprintf(['Aligning NEV and PLDAPS trials via constrained sequence ' ...
     'search...\n']);
 nev_to_pds_map = nan(nNevTrials, 1);
-% define a numeric index of pds_strobes rows so we can limit our search of
-% pds_strobes to rows after the last match:
-pds_strobes_ind = (1:length(pds_strobes))';
 
-% Initialize a pointer to track the last successful PDS match
+% --- Pre-computation of PDS trialCount ---
+% Extract the trialCount from each pds_strobe list using a vectorized
+% approach. This is for the "Anchor-and-Step" matching method.
+codes = utils.initCodes;
+% Use cellfun with a circshift trick to find the value after the trialCount code.
+% 'UniformOutput' is false to handle cases where the code is not found,
+% which returns an empty cell.
+temp_counts = cellfun(@(x) x(circshift(x==codes.trialCount, 1)), pds_strobes, 'UniformOutput', false);
+% Replace empty cells (where trialCount was not found) with NaN.
+empty_indices = cellfun('isempty', temp_counts);
+temp_counts(empty_indices) = {NaN};
+% Convert the cell array back to a numeric vector.
+pds_trialCount = cell2mat(temp_counts);
+% --- End of Pre-computation ---
+
+% --- Anchor-and-Step Matching Logic ---
+% Phase 1: Find the Initial Anchor Match
+initial_anchor_found = false;
 last_match_pds_idx = 0;
-try
-% Now, implement the cellfun mapping logic. Loop through each NEV trial,
-% find its match in the pds_strobes cell array, and record the index.
-for i = 1:nNevTrials
-    nev_strobe_vector = eventValuesTrials{i}(:);
-    % Use cellfun to find a match in the PLDAPS strobes
-    match_idx = find(cellfun(@(x) isequal(x, nev_strobe_vector), ...
-        pds_strobes), 1);
-    
-    % If we don't find a match, try again using the nev_strobe_vector with
-    % '30009' added to the end (trialEnd)
-    if isempty(match_idx) && nev_strobe_vector(end) ~= 30009
-        % apparently we may have cases in which the final value of the
-        % nev_strobe_vector isn't 30009 BUT one of the earlier values IS
-        % 30009. It's even more complicated than that, unfortunately,
-        % because sometimes there are TWO trialEnd strobes :(. I think this
-        % approach can still work though.
-        match_idx = find(cellfun(@(x) isequal(x, ...
-           [nev_strobe_vector; 30009]), ...
-        pds_strobes), 1);
-    end
-    % If we STILL don't find a match, try again using the
-    % nev_strobe_vector limited to the 1st value up to the '30009'
-    if isempty(match_idx) && nnz(nev_strobe_vector == 30009) == 1
-        % apparently we may have cases in which the final value of the
-        % nev_strobe_vector isn't 30009 BUT one of the earlier values IS
-        % 30009. It's even more complicated than that, unfortunately,
-        % because sometimes there are TWO trialEnd strobes :(. I think this
-        % approach can still work though.
-        match_idx = find(cellfun(@(x) isequal(x, ...
-           nev_strobe_vector(1:find(nev_strobe_vector == 30009))), ...
-        pds_strobes), 1);
-    end
-    % If we STILL don't find a match, try using 'least common subsequence'
-    % (LCS) screening within a constrained window.
-    if isempty(match_idx)
-        % Define the search window starting after the last match
-        search_window_size = 25;
-        search_start_idx = last_match_pds_idx + 1;
-        search_end_idx = min(search_start_idx + search_window_size, length(pds_strobes));
-        
-        search_indices = search_start_idx:search_end_idx;
-        
-        if ~isempty(search_indices)
-            % Compute LCS values only within the search window
-            lcsVals = cellfun(@(x)utils.calculateLCSLength(...
-                nev_strobe_vector, x), pds_strobes(search_indices));
+anchor_nev_idx = 0;
 
-            if ~isempty(lcsVals)
-                % Find the best score and any ties within the window
-                maxLcs = max(lcsVals);
-                % Get the RELATIVE indices of ties within the search window
-                relative_indices_of_ties = find(lcsVals == maxLcs);
-                % The best match is the first of these ties
-                best_relative_index = relative_indices_of_ties(1);
-                % Convert the relative index back to the absolute index
-                match_idx = search_indices(best_relative_index);
-            end
-        end
-    end
-    % If we have a match, add it to the nev_to_pds_map and update the pointer
-    if ~isempty(match_idx)
+for i = 1:min(100, nNevTrials)
+    nev_strobe_vector = eventValuesTrials{i}(:);
+    
+    % Find all potential matches in the entire PDS strobe list
+    match_indices = find(cellfun(@(x) isequal(x, nev_strobe_vector), pds_strobes));
+
+    % We are looking for a unique, unambiguous match
+    if numel(match_indices) == 1
+        match_idx = match_indices(1);
+
         nev_to_pds_map(i) = match_idx;
         last_match_pds_idx = match_idx;
-    else
-        % If no match is found by any method, we do not assign a match for this
-        % NEV trial and crucially, we DO NOT advance last_match_pds_idx.
-        % This allows the search window for the next NEV trial to start from
-        % the same PDS trial, giving it a chance to "skip over" this
-        % unmatchable NEV fragment.
+        initial_anchor_found = true;
+        anchor_nev_idx = i;
+        fprintf('Anchor match found: NEV trial %d -> PDS trial %d\n', i, match_idx);
+        break; % Exit after finding the first solid anchor
     end
 end
-catch me
-    keyboard
+
+% If no anchor is found, we cannot reliably proceed.
+if ~initial_anchor_found
+    error('Could not find a reliable anchor match in the first 100 trials. Aborting.');
+end
+
+% Phase 2: Step Through Subsequent Matches via trialCount
+if anchor_nev_idx < nNevTrials
+    for i = (anchor_nev_idx + 1):nNevTrials
+        target_count = trialInfo.trialCount(i);
+
+        % Skip if NEV trial is missing a trialCount
+        if isnan(target_count)
+            continue;
+        end
+        
+        max_retries = 3;
+        search_window_size = 20;
+        
+        for retry = 1:max_retries
+            search_start_idx = last_match_pds_idx + 1;
+            search_end_idx = min(search_start_idx + search_window_size - 1, nPdsTrials);
+
+            if search_start_idx > nPdsTrials
+                break; % Stop if we've exhausted all PDS trials
+            end
+
+            search_range = search_start_idx:search_end_idx;
+
+            % Find the first occurrence of target_count in the window
+            relative_idx = find(pds_trialCount(search_range) == target_count, 1);
+
+            if ~isempty(relative_idx)
+                % Convert relative index to absolute PDS trial index
+                match_pds_idx = search_range(relative_idx);
+
+                nev_to_pds_map(i) = match_pds_idx;
+                last_match_pds_idx = match_pds_idx;
+                break; % Match found, exit the retry loop
+            else
+                % If no match, expand the window for the next retry
+                search_window_size = search_window_size * 2;
+            end
+        end
+        % If the loop finishes without a match, nev_to_pds_map(i) remains NaN
+    end
 end
 
 nMatchedTrials = sum(~isnan(nev_to_pds_map));
