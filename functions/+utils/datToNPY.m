@@ -1,42 +1,73 @@
-
-
 function datToNPY(inFilename, outFilename, dataType, shape, varargin)
-% function datToNPY(inFilename, outFilename, shape, dataType, [fortranOrder, littleEndian])
+% DATTOPNY Creates a .npy file from a raw binary .dat file.
 %
-% make a NPY file from a flat binary file, given that you know the shape,
-% dataType, ordering, and endianness of the flat binary file. 
-% 
-% The point here is you don't want to read in all the data from the
-% existing binary file - instead you can just create the appropriate header
-% and then concatenate it with the data. 
+% This function efficiently creates a NumPy .npy file by prepending a
+% valid header to an existing flat binary file, without loading the entire
+% file into memory. It achieves this by writing the header to a temporary
+% file and then using system commands to concatenate the header and the
+% original data file.
 %
-% ** completely untested
+%   Inputs:
+%       inFilename (string)   - Path to the input flat binary (.dat) file.
+%       outFilename (string)  - Path to the output .npy file.
+%       dataType (string)     - MATLAB data type (e.g., 'int16', 'double').
+%       shape (vector)        - Vector of the array's dimensions.
+%       varargin              - Optional arguments:
+%                               {1}: fortranOrder (logical, default true)
+%                               {2}: littleEndian (logical, default true)
 
-if ~isempty(varargin)
-    fortranOrder = varargin{1}; % must be true/false
-    littleEndian = varargin{2}; % must be true/false
-else
-    fortranOrder = true;
-    littleEndian = true;
+% Set default values for optional arguments.
+fortranOrder = true;
+littleEndian = true;
+if nargin > 4
+    fortranOrder = varargin{1};
+end
+if nargin > 5
+    littleEndian = varargin{2};
 end
 
-header = constructNPYheader(dataType, shape, fortranOrder, littleEndian);
+% Prevent in-place operations which are unsafe with this method.
+if strcmp(inFilename, outFilename)
+    error('Input and output filenames must be different.');
+end
 
-% ** TODO: need to put the header into a temp file instead, in case the
-% outFilename is the same as the inFilename (and then delete the temp file
-% later)
+% Construct the NPY header.
+header = utils.constructNPYheader(dataType, shape, fortranOrder, littleEndian);
+
+% Create a temporary file to hold the header.
+tempFilename = [tempname, '.tmp'];
 fid = fopen(tempFilename, 'w');
-fwrite(fid, header, 'uint8');
-fclose(fid)
-
-str = computer;
-switch str
-    case {'PCWIN', 'PCWIN64'}
-        [~,~] = system(sprintf('copy /b %s+%s %s', tempFilename, inFilename, outFilename));
-    case {'GLNXA64', 'MACI64'}
-        [~,~] = system(sprintf('cat %s %s > %s', tempFilename, inFilename, outFilename));
-        
-    otherwise
-        fprintf(1, 'I don''t know how to concatenate files for your OS, but you can finish making the NPY youself by concatenating %s with %s.\n', tempFilename, inFilename);
+if fid == -1
+    error('Could not create temporary file for header.');
 end
-    
+
+% Ensure the temporary file is deleted when the function exits.
+cleanupTask = onCleanup(@() delete(tempFilename));
+
+% Write the header to the temporary file.
+fwrite(fid, header, 'uint8');
+fclose(fid);
+
+% Use OS-specific system commands to concatenate the header and data file.
+os = computer;
+switch os
+    case {'PCWIN', 'PCWIN64'}
+        % For Windows, use 'copy /b' for binary concatenation.
+        command = sprintf('copy /b "%s"+"%s" "%s"', ...
+            tempFilename, inFilename, outFilename);
+    case {'GLNXA64', 'MACI64'}
+        % For Linux/macOS, use 'cat'.
+        command = sprintf('cat "%s" "%s" > "%s"', ...
+            tempFilename, inFilename, outFilename);
+    otherwise
+        error('datToNPY:UnsupportedOS', ...
+            'Your OS (%s) is not supported for file concatenation.', os);
+end
+
+[status, cmdout] = system(command);
+if status ~= 0
+    error('datToNPY:ConcatFailed', ...
+        'File concatenation failed:\n%s', cmdout);
+end
+
+end

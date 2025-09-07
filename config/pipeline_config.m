@@ -4,21 +4,23 @@ function config = pipeline_config()
     %   Returns:
     %       config (struct): A struct containing all configuration parameters.
 
-    % Get the OneDrive 'root' directory in which we expect to find the raw
-    % neuronal data directory, the nested behavioral output from PLDAPS
-    % directory, and the place we'll create a directory to store the .DAT
-    % file and other Kilosort output for each session's data.
+    % Get the OneDrive 'root' directory. This is the parent folder for
+    % multiple data directories, including the raw neuronal data,
+    % behavioral data from PLDAPS, and the Kilosort output directories.
     oneDriveRoot = utils.findOneDrive();
 
-    % Define directory paths
+    % Define directory paths.
     config.rawNeuralDataDir = fullfile(oneDriveRoot, 'Neuronal Data');
     config.behavioralDataDir = fullfile(oneDriveRoot, 'Behavioral Data', ...
         'PLDAPS_output', 'output');
-    % Define a SINGLE parent directory for ALL processed data.
-    config.processedDataDir = fullfile(oneDriveRoot, 'Neuronal Data Analysis');
+
+    % Define a single parent directory for all processed data.
+    config.processedDataDir = fullfile(oneDriveRoot, ...
+        'Neuronal Data Analysis');
 
     % Other Parameters
-    config.samplingRate = 30000; % Sampling rate in Hz
-    config.n_channels_in_dat = 32; % Number of channels in the .dat file
-    config.waveform_window_size = [-40, 41]; % Window size for waveform extraction
+    config.samplingRate = 30000; % Sampling rate in Hz.
+    config.n_channels_in_dat = 32; % Number of channels in the .dat file.
+    % Window size for waveform extraction.
+    config.waveform_window_size = [-40, 41];
 end

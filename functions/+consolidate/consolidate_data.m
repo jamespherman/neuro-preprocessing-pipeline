@@ -15,46 +15,59 @@ function success = consolidate_data(job, config)
     success = false; % Default to failure
 
     try
+        % Define the directory for this specific job's processed data.
         jobDataDir = fullfile(config.processedDataDir, job.unique_id);
 
-        % Define paths for all input files
-        behavioralDataPath = fullfile(jobDataDir, job.unique_id + "_intermediate_data.mat");
-        sessionDataPath = fullfile(jobDataDir, job.unique_id + "_session_data.mat");
+        % Define paths for all input files.
+        behavioralDataPath = fullfile(jobDataDir, ...
+            [job.unique_id, '_intermediate_data.mat']);
+        sessionDataPath = fullfile(jobDataDir, ...
+            [job.unique_id, '_session_data.mat']);
         spike_times_path = fullfile(jobDataDir, 'spike_times.npy');
         spike_clusters_path = fullfile(jobDataDir, 'spike_clusters.npy');
         cluster_info_path = fullfile(jobDataDir, 'cluster_info.tsv');
 
         % --- Load all data sources ---
 
-        % 1. Load intermediate behavioral data
+        % 1. Load intermediate behavioral data.
         if ~exist(behavioralDataPath, 'file')
-            error('consolidate:consolidate_data:behavioralDataNotFound', 'Intermediate behavioral data file not found: %s', behavioralDataPath);
+            error('consolidate:DataNotFound', ...
+                'Intermediate behavioral data file not found: %s', ...
+                behavioralDataPath);
         end
-        load(behavioralDataPath, 'trialInfo', 'eventTimes', 'eventValuesTrials');
+        load(behavioralDataPath, ...
+            'trialInfo', 'eventTimes', 'eventValuesTrials');
 
-        % close any opened figure windows
+        % The previous function may have left figures open. Close them.
         try close all force;
-        catch me
+        catch
         end
 
-        % 2. Load Kilosort output
-        if ~exist(spike_times_path, 'file') || ~exist(spike_clusters_path, 'file') || ~exist(cluster_info_path, 'file')
-            error('consolidate:consolidate_data:kilosortOutputNotFound', 'One or more Kilosort output files are missing in %s', jobDataDir);
+        % 2. Load Kilosort output.
+        if ~exist(spike_times_path, 'file') || ...
+           ~exist(spike_clusters_path, 'file') || ...
+           ~exist(cluster_info_path, 'file')
+            error('consolidate:KilosortOutputNotFound', ...
+                'One or more Kilosort output files are missing in %s', ...
+                jobDataDir);
         end
         spike_times = utils.readNPY(spike_times_path);
         spike_clusters = utils.readNPY(spike_clusters_path);
         cluster_info = tdfread(cluster_info_path);
 
-        % 3. Load extracted waveforms from the existing session_data file
+        % 3. Load extracted waveforms from the existing session_data file.
         if ~exist(sessionDataPath, 'file')
-            error('consolidate:consolidate_data:sessionDataNotFound', 'Session data file not found: %s', sessionDataPath);
+            error('consolidate:SessionDataNotFound', ...
+                'Session data file not found: %s', sessionDataPath);
         end
+        % This file will be overwritten, so we must load its contents first.
         existing_data = load(sessionDataPath, 'session_data');
         wfMeans = existing_data.session_data.spikes.wfMeans;
         wfStds = existing_data.session_data.spikes.wfStds;
-        % close any opened figure windows
+
+        % The previous function may have left figures open. Close them.
         try close all force;
-        catch me
+        catch
         end
 
         % --- Consolidate data into a single struct ---
@@ -67,26 +80,32 @@ function success = consolidate_data(job, config)
         session_data.spikes.clusters = spike_clusters;
         session_data.spikes.cluster_info = cluster_info;
 
-        % Assign the loaded waveforms
+        % Assign the loaded waveforms.
         session_data.spikes.wfMeans = wfMeans;
         session_data.spikes.wfStds = wfStds;
 
-        % Convert spike times from samples to seconds (assuming 30kHz sampling rate)
+        % Convert spike times from samples to seconds.
         fprintf('Converting spike times from samples to seconds...\n');
-        session_data.spikes.times = double(session_data.spikes.times) / 30000;
+        session_data.spikes.times = double(session_data.spikes.times) / ...
+            config.samplingRate;
 
         % --- Save the final consolidated data ---
 
-        outputFilePath = fullfile(jobDataDir, job.unique_id + "_session_data.mat");
+        outputFilePath = fullfile(jobDataDir, ...
+            [job.unique_id, '_session_data.mat']);
         save(outputFilePath, 'session_data', '-v7.3');
 
-        fprintf('Successfully consolidated data for session %s\n', job.unique_id);
+        fprintf('Successfully consolidated data for session %s\n', ...
+            job.unique_id);
         success = true;
 
     catch ME
-        fprintf(2, 'ERROR during data consolidation for %s:\n', job.unique_id);
+        fprintf(2, 'ERROR during data consolidation for %s:\n', ...
+            job.unique_id);
         fprintf(2, '%s\n', ME.message);
-        warning('Execution paused in the debugger. Inspect variables (ME, job, config) and type ''dbcont'' to continue or ''dbquit'' to exit.');
+        warning(['Execution paused in the debugger. Inspect variables', ...
+            ' (ME, job, config) and type ''dbcont'' to continue or', ...
+            ' ''dbquit'' to exit.']);
         keyboard; % Pause for debugging
     end
 end

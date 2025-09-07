@@ -1,197 +1,174 @@
 classdef classyStrobe < handle
-    % hacky calss to strobe values to PLEXON ephys.
-    % key methods:
-    %   addValue - adds a vlaue to the valueList, which will be strobed
-    %              once the 'strobe' method is called
-    %   strobe - when called strobes all values that are in the valueList.
-    %   xxxxx
-    %   xxxxx
-    
-    % IMPORTANT:
-    % right now, this only works with Plexon, not any other ephys system.
-    
-    % 20180606 - lnk & jph wrote it
-    
+% CLASSYSTROBE A class for managing and sending event codes (strobes).
+%
+% This class provides a structured way to send numerical event markers to an
+% ephys recording system (e.g., Plexon) via a Datapixx device. It allows
+% for queueing values, sending them in a batch, and preventing duplicate
+% strobes using a veto system.
+
+% NOTE: This class is currently hardcoded for use with a Plexon system via
+%       Datapixx. It will not work with other hardware without modification.
+
     properties
-        valueList       = []; % list of values staged to be strobed upon command (either the 'strobeList', or 'strobeNow' methods)
-        armedToStrobe   = []; % boolean.    
-        vetoList        = []; % list of values that will not be strobed. The only way to override this is by using methods 'flushVetoList' or 'removeFromVetoList'
-        strobedList     = []; % a list of values that were strobed for bookkeeping or analysis
-        % define here any strobe codes that are internal to the class.
-        % This code should not overlap with any code in the 'codes'
-        % file (e.g. in pds.initCodes). This is CRITICAL. 
-        internalStrobeCodes = struct('isCell', 32123, 'cellLength', 32124);
+        % A list of values queued to be sent on the next call to 'strobeList'.
+        valueList = [];
+
+        % A boolean flag indicating if there are values in the valueList.
+        armedToStrobe = false;
+
+        % A list of values that have been strobed once and should not be
+        % strobed again unless the veto is removed.
+        vetoList = [];
         
+        % A log of all values that have been successfully strobed.
+        strobedList = [];
+
+        % Internal codes used to handle special data types like cell arrays.
+        % CRITICAL: These codes must not overlap with any experimental event
+        % codes defined elsewhere (e.g., in pds.initCodes).
+        internalStrobeCodes = struct('isCell', 32123, 'cellLength', 32124);
     end
     
-    
-    %%
     methods
-        
-        function self = strb(self)
-            % constructor function
-            
+        function self = classyStrobe(self)
+            % CLASSYSTROBE Constructor for the classyStrobe class.
         end
         
-        %%
         function self = addValue(self, value)
-            % adds a value to the list of values 'valueList'. Any value on
-            % this list will get strobed once method 'strobe' is issued.
-            
+            % ADDVALUE Adds a value or list of values to the strobe queue.
+            %
+            % This method handles numeric arrays, cell arrays, and logicals.
+            % Cell arrays are specially encoded with a header triplet for
+            % robust decoding later.
             
             if isnumeric(value)
-                % if 'value' is numeric (either scalar or vecotr) its contents
-                % will be added to the list:
-                self.valueList      = [self.valueList; value];
+                % Add numeric scalars or vectors directly to the list.
+                self.valueList = [self.valueList; value];
             
             elseif iscell(value)
-                % however, if it is a cell, we loop through and add the
-                % contents of each cell to the list. 
-                % Each cell is preceded by a triplette of strobes, for 
-                % error-checking: 
-                % 1- codes.isCell - to indicate the beginning of a cell
-                % 2- codes.cellLength - to indicate length of cell
-                % 3- the numerical length of the cell. 
-                % Thus, user can check for errors when decoding. 
-                
-                cellOfValues = value; % just for readability
-                % for each cell:
+                % For cell arrays, prepend each cell's data with a
+                % three-part header for robust decoding:
+                %   1. A code indicating the start of a cell's data.
+                %   2. A code indicating that the next value is the length.
+                %   3. The length of the cell's data.
+                cellOfValues = value; % Use a more descriptive name.
                 for ii = 1:numel(cellOfValues)
                     cellLength = numel(cellOfValues{ii});
                     
-                    % add the triplette to the list:
-                    strobeTriplette = [self.internalStrobeCodes.isCell; ...
-                                       self.internalStrobeCodes.cellLength; ...
-                                       cellLength]; 
-                    self.valueList  = [self.valueList; strobeTriplette]; 
+                    % Define the header triplet.
+                    strobeTriplet = [self.internalStrobeCodes.isCell; ...
+                                     self.internalStrobeCodes.cellLength; ...
+                                     cellLength];
+                    self.valueList = [self.valueList; strobeTriplet];
                     
-                    % and now add the cell's contents to the valueList:
-                    self.valueList      = [self.valueList; value{ii}];
+                    % Add the actual cell contents to the list.
+                    self.valueList = [self.valueList; value{ii}];
                 end
                 
             elseif islogical(value)
-                % is the value happens to be a logical, convert it into
-                % int16 and then add to value list:
-                self.valueList      = [self.valueList; double(value)];
+                % Convert logicals to doubles before adding to the list.
+                self.valueList = [self.valueList; double(value)];
             else
-                error('THIS IS NOT THE STROBE YOU''RE LOOKING FOR')
+                error('classyStrobe:UnsupportedType', ...
+                    'Input must be numeric, cell, or logical.');
             end
-            self.armedToStrobe  = true;
-                
+            self.armedToStrobe = true;
         end
         
-        %%
         function self = strobeList(self)
-            % strobes all values that are in the list 'valueList'
+            % STROBELIST Sends all values currently in the valueList queue.
             
-            % if valueList is empty, get outa here
             if isempty(self.valueList)
-                return;
+                return; % Do nothing if the list is empty.
             end
             
-            % strobe each of the values stored in valueList:
+            % Strobe each value in the list.
             nValues = numel(self.valueList);
             for iV = 1:nValues
                 value = self.valueList(iV);
-                strobe(value);
-                % and store for bookeeping:
+                strobe(value); % Call the local strobe function.
+                % Log the strobed value for bookkeeping.
                 self.strobedList(end+1) = value;
             end
             
-            % clear the list and un-arm the trigger:
-            self.valueList      = [];
-            self.armedToStrobe  = false;
-            
+            % Clear the list and reset the armed flag.
+            self.valueList = [];
+            self.armedToStrobe = false;
         end
         
-        %%
         function self = strobeNow(self, value)
-            % strobes the value supplied as input, independantly of values
-            % in 'valueList'
+            % STROBENOW Immediately sends a single value, bypassing the queue.
             
             strobe(value);
-            % and store for bookeeping:
+            % Log the strobed value for bookkeeping.
             self.strobedList(end+1) = value;
         end
         
-        %%
         function self = addValueOnce(self, value)
-            % adds a value to the 'valiueList' such that it may be strobed
-            % once the 'strobeList' method is issued, BUT, it also adds the 
-            % value to a 'vetoList' such that it doesn't get strobed again.
+            % ADDVALUEONCE Adds a value to the queue for a single strobe.
             %
-            % * In order to override this and
-            % strobe the value once more, user will have to remove the
-            % value from the vetoList with the method
-            % 'removeFromVetoList'.
+            % After being strobed via 'strobeList', the value is added to a
+            % vetoList to prevent it from being strobed again. To re-strobe,
+            % the value must be removed from the vetoList first.
             
-            % if value is in 'vetoList', do nothing. Otherwise, add it to 
-            % 'valueList' for subsequent strobing (via 'strobe') but then,
-            % critically, add the value to vetoList:
             if any(value == self.vetoList)
-%                d disp([num2str(value) ' HAS BEEN VEOTED MWU HAHAHA!'])
+                % If the value is already on the veto list, do nothing.
             else
                 self.addValue(value);
                 self.vetoList = [self.vetoList; value];
             end
         end
         
-        %% 
         function self = flushVetoList(self)
-            % clear all values in the vetoList
-
+            % FLUSHVETOLIST Clears all values from the vetoList.
             self.vetoList = [];
-            
         end
         
-        %% 
         function self = flushStrobedList(self)
-            % clear all values in the strobedList
-
+            % FLUSHSTROBEDLIST Clears the log of all strobed values.
             self.strobedList = [];
-            
         end
         
-        
-        %% 
         function self = removeFromVetoList(self, value)
-            % if the input 'value' exists in the vetoList, this
-            % function removes it from the list such that it may be strobed
-            % with the strobeOnce method.
+            % REMOVEFROMVETOLIST Removes a specific value from the vetoList.
             
-            if find(value == self.vetoList)
-                ptr     = value == self.vetoList;
+            if any(value == self.vetoList)
+                ptr = (value == self.vetoList);
                 self.vetoList(ptr) = [];
             end
-               
-            
         end
-        
     end
 end
 
-%%
-
 function [] = strobe(value, verbose)
-% the core function that issues the Datapixx commands that strobe the value
-% or list of values to the ephys recording maching.
-% *** Currently only tailored to Plexon.
+% STROBE Core function to send a value to the ephys system via Datapixx.
+%
+% This function performs the low-level hardware communication to send a
+% 15-bit value and a strobe pulse.
 
 if ~exist('verbose', 'var')
     verbose = false;
 end
 
-% strobe it like its hot:
-Datapixx('SetDoutValues', value, 32767)    % set word in first 15 bits hex2dec('007fff')
-Datapixx('RegWr');
-Datapixx('SetDoutValues', 2^16, 65536)   % set STRB to 1 (true) hex2dec('010000')
-Datapixx('RegWr');
-Datapixx('SetDoutValues', 0, 98303)      % reset strobe and all 15 bits to 0. hex2dec('017fff')
+% This sequence sends a 15-bit value and a strobe pulse to the ephys rig.
+% 1. Set the 15 digital output lines to the desired 'value'.
+%    The mask 32767 (or '7FFF' hex) ensures only the first 15 bits are affected.
+Datapixx('SetDoutValues', value, 32767);
+Datapixx('RegWr'); % Write the register to apply the change.
+
+% 2. Set the 16th bit (the strobe line) to 1 (high).
+%    The mask 65536 (or '10000' hex) targets only the 16th bit.
+Datapixx('SetDoutValues', 2^16, 65536);
 Datapixx('RegWr');
 
-% for debugging, display the values strobed:
+% 3. Reset the strobe line and all 15 data lines to 0.
+%    The mask 98303 ('17FFF' hex) covers all 16 bits.
+Datapixx('SetDoutValues', 0, 98303);
+Datapixx('RegWr');
+
+% For debugging, display the strobed value to the command window.
 if verbose
-    disp(['boom - ' num2str(value)])
+    disp(['Strobed: ', num2str(value)]);
 end
 end
 

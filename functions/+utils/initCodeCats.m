@@ -1,31 +1,29 @@
-function codes = initCodeCats
-%   codes = pds.initCodes
+function codes = initCodeCats()
+% INITCODECATS Defines categories for all strobe event codes.
 %
-% PAN-TASK function that initializes codes used to strobe events to the 
-% ehpys recording system.
-% These are the same codes that will identify events in the ephys file
-% so this file is HOLY. 
-% Once recording has been done, this file is the only way to reconstruct 
-% the data so I'm not kidding-- H O L Y.
+% This function creates a structure that assigns a category to every
+% event code used in the experimental tasks. This categorization is
+% critical for the data parsing function `utils.getEventTimes.m`.
 %
-% For every new taks you code, it will likely use many event codes that are
-% already present in this file. Enjoy them. For any new codes you might
-% need, just add them to this file and verify that don't overlap with
-% existing codes by running the verification cell at the bottom. 
+% There are two categories for event codes:
+%   - Timing Strobe (value of 0): Marks a specific point in time when an
+%     event occurred (e.g., fixOn, targetOn).
+%   - Information Strobe (value of 1): Indicates that the *next* strobed
+%     value is not a code, but rather the data value for a variable
+%     (e.g., trialCount, stimSeed).
+%
+% NOTE: This file is a critical part of the data analysis pipeline.
+% Modifying the values in this file without a corresponding change in the
+% data acquisition code will break the analysis of all previously
+% collected data.
 
-% two kinds of strobes:
-% Paired-strobe (value of 1)
-% timing-strobe (value of 0)
-
-%% task code
+%% Task Identification Codes
 % Paired-strobe. Its pair is a unique task code that is set in the
-% settings file, and takes the value of one of the unique task codes 
-% defined in the cell "holy unique task codes", below.
+% settings file. The value is defined in `initCodes.m`.
 codes.taskCode          = 1;
 
-%% holy unique task codes:
-% Each task gets its own unique task code for easy identification. These
-% are the values that are strobed after taskCode is strboed. 
+% The following 'uniqueTaskCode' fields are for categorizing the *value*
+% that follows the 'taskCode' strobe. They are all info strobes.
 codes.uniqueTaskCode_mcd        = 1;
 codes.uniqueTaskCode_gSac    	= 1;
 codes.uniqueTaskCode_freeView   = 1;
@@ -42,62 +40,55 @@ codes.uniqueTaskCode_seansFirstTask = 1;
 codes.uniqueTaskCode_tokens         = 1;
 codes.uniqueTaskCode_gSac_4factors  = 1;
 
-%% unique codes that are internal to the 'classyStrobe' function class
-% (see pds.classyStrobe.m for more details)
+%% Internal Codes
+% These codes are used by the 'classyStrobe' utility to handle
+% special data types like cell arrays.
 codes.isCell        = 1;
 codes.cellLength    = 1;
 
-%% currently using fst codse...
-
-% trial codes
-codes.trialBegin        = 0; % The very beginning of a trial 
-codes.trialEnd          = 0; % The very end of a trial 
-codes.connectPLX        = 1; % ???
-codes.trialCount        = 1; 
-codes.blockNumber       = 1; 
+%% Trial-level Codes
+codes.trialBegin        = 0; % The very beginning of a trial.
+codes.trialEnd          = 0; % The very end of a trial.
+codes.connectPLX        = 1; % Status of Plexon connection.
+codes.trialCount        = 1; % The sequential trial number from PLDAPS.
+codes.blockNumber       = 1; % The block number.
 codes.trialInBlock      = 1;
 codes.setNumber         = 1;
-codes.state             = 1;
+codes.state             = 1; % The state of the trial state machine.
 codes.trialCode         = 1;
 codes.trialType         = 1;
 codes.fileSufix         = 1; 
 codes.taskType          = 1;
 codes.goodTrialCount    = 1;
-codes.goodtrialornot    = 1; % Gongchen Added on 2019/12/30 I think it is better than goodTrialCount
-                                 % Also I think these codes are better
-                                 % start from '2~9' rather than 1, because
-                                 % the code.time_1hhmm can sometimes contaminate the code  
-%%  date & time
-% these codes have a '1' before the date/time signifiers because a given
-% date could lose its 0, e.g. the time_hhmm: 0932, would be sent as 932. By
-% adding a '1' we get 10932, thus saving the 0. As long as user remembers
-% to remove the first digit from the strobed values, we're all good.
+% Indicates if the trial was successful (e.g., 1=good, 0=bad).
+codes.goodtrialornot    = 1;
+
+%% Date & Time Codes
+% These codes have a '1' prepended to the date/time value to prevent
+% the loss of leading zeros (e.g., time 09:32 becomes 10932).
 codes.date_1yyyy      = 1;
 codes.date_1mmdd      = 1;
 codes.time_1hhmm      = 1;
 
-%%
-codes.repeat20          = 1; % 1 = 20 repeat trials during MemSac task.
-codes.vissac            = 1; % 1 = vis sac; 0 = memsac protocol
-codes.inactivation      = 1; % during inactivation
-codes.useMotionStim     = 1; % use motion stim for mapping
+%% Task-Specific Flags
+codes.repeat20          = 1; % Flag for repeat trials in MemSac task.
+codes.vissac            = 1; % 1 = visually-guided sac; 0 = memory-guided sac.
+codes.inactivation      = 1; % Flag for inactivation sessions.
+codes.useMotionStim     = 1; % Flag for using motion stimuli.
 
+%% End of Trial Codes
+codes.nonStart          = 0; % Trial aborted because subject failed to start.
+codes.joyBreak          = 0; % Trial aborted due to premature joystick release.
+codes.fixBreak          = 0; % Trial aborted due to fixation break.
+codes.fixBreak2         = 0; % A secondary fixation break code.
 
-%% end of trial codes:
-% code to represent a trial non strat 
-codes.nonStart          = 0;
-codes.joyBreak          = 0;
-codes.fixBreak          = 0;
-codes.fixBreak2         = 0; % this is if monkey breaks fixation whennot holding joystick in attn task
-
-
-%% joystick codes
+%% Joystick Codes
 codes.joyPress              = 0;
 codes.joyRelease            = 0;
 codes.joyPressVoltDir       = 1; 
-codes.passJoy               = 1;
+codes.passJoy               = 1; % Flag to simulate correct joystick behavior.
 
-%% fixation codes
+%% Fixation Point Codes
 codes.fixOn             = 0;
 codes.fixDim            = 0;
 codes.fixOff            = 0;
@@ -107,26 +98,24 @@ codes.fixRadius         = 1;
 codes.fixDimValue       = 1;
 codes.fixChangeTrial    = 1;
 
-%% saccade codes (used in gSac)
+%% Saccade Codes
 codes.saccadeOnset      = 0;
 codes.saccadeOffset     = 0;
 codes.blinkDuringSac    = 0;
+codes.saccToTargetOne	= 0; % Saccade was made to target one.
+codes.saccToTargetTwo	= 0; % Saccade was made to target two.
 
-% used in seansfirsttask
-codes.saccToTargetOne	= 0; % Used to identify which target monkey made a saccade to
-codes.saccToTargetTwo	= 0;
-
-%% target codes (used in gSac)
+%% Target Codes
 codes.targetOn          = 0;
 codes.targetDim         = 0;
 codes.targetOff         = 0;
 codes.targetAq          = 0;
 codes.targetFixBreak    = 0;
-codes.targetReillum     = 0; % target reillumination after a successful memory guided saccade
+codes.targetReillum     = 0; % Target re-illumination after mem-guided saccade.
 codes.targetTheta       = 1;
 codes.targetRadius      = 1;
 
-%% cue codes (used in mcd)
+%% Cue Codes
 codes.cueOn             = 0;
 codes.cueOff            = 0;
 codes.stimLoc1Elev      = 1;
@@ -134,88 +123,68 @@ codes.stimLoc1Ecc       = 1;
 codes.stimLoc2Elev      = 1;
 codes.stimLoc2Ecc       = 1;
 
-% tokens task codes
-codes.CUE_ON = 0; % [cite: 1]
-codes.REWARD_GIVEN = 0; % [cite: 1]
-codes.TRIAL_END = 0; % [cite: 1]
-codes.REWARD_AMOUNT_BASE = 1; % Base for strobing reward amount [cite: 1]
-codes.OUTCOME_DIST_BASE = 1; % Base for strobing outcome distribution type [cite: 1]
-codes.rwdAmt = 1;
+%% Tokens Task Codes
+codes.CUE_ON                = 0;
+codes.REWARD_GIVEN          = 0;
+codes.TRIAL_END             = 0;
+codes.REWARD_AMOUNT_BASE    = 1;
+codes.OUTCOME_DIST_BASE     = 1;
+codes.rwdAmt                = 1;
 
-% gSac_4factors codes
+%% gSac_4factors Task Codes
 codes.halfBlock     = 1;
 codes.stimType      = 1;
 codes.salience      = 1;
 codes.targetColor   = 1;
 codes.targetLocIdx  = 1;
 
-%% stimulus codes (used in mcd, pFix, etc.)
-
+%% Stimulus Codes
 codes.stimOnDur                 = 1;
 codes.stimOffDur                = 1;
-codes.stimOn                    = 0; % timing
-codes.stimOff                   = 0; % timing
+codes.stimOn                    = 0;
+codes.stimOff                   = 0;
+codes.stimChange                = 0;
+codes.noChange                  = 0; % Note: redundant with stimChange?
 
-codes.cueChange                 = 0;
-codes.foilChange                = 0;
-codes.noChange                  = 0;
+% Trial type info
 codes.isCueChangeTrial          = 1;
 codes.isFoilChangeTrial         = 1;
 codes.isNoChangeTrial           = 1;
-codes.cueMotionDelta            = 1;
-codes.foilMotionDelta           = 1;
-codes.cueStimIsOn               = 1; % cued stimulus was shown in this trial
-codes.foilStimIsOn              = 1; % foil stimulus was shown in this trial
-codes.isContrastChangeTrial     = 1; % this trial had a contrast change
-codes.hit                       = 1; % this trial ended in a hit
-codes.miss                      = 1; % this trial ended in a miss
-codes.foilFa                    = 1; % this trial ended in a foil FA
-codes.cr                        = 1; % this trial ended in a CR
-codes.fa                        = 1; % this trial ended in a FA
-codes.stimChange                = 0;
-codes.noChange                  = 0;
-codes.isStimChangeTrial         = 1;
-codes.isNoChangeTrial           = 1;
-codes.stimLoc1On                = 1; % stimulus at location one was on in this trial
-codes.stimLoc2On                = 1; % stimulus at location one was on in this trial
-codes.stimLoc3On                = 1; % stimulus at location one was on in this trial
-codes.stimLoc4On                = 1; % stimulus at location one was on in this trial
-codes.stimChangeTrial           = 1;
+codes.isContrastChangeTrial     = 1;
+codes.isStimChangeTrial         = 1; % Note: redundant.
+
+% Trial outcome info
+codes.hit                       = 1;
+codes.miss                      = 1;
+codes.foilFa                    = 1;
+codes.cr                        = 1;
+codes.fa                        = 1;
+
+% Stimulus location info
+codes.stimLoc1On                = 1;
+codes.stimLoc2On                = 1;
+codes.stimLoc3On                = 1;
+codes.stimLoc4On                = 1;
+codes.stimChangeTrial           = 1; % Note: redundant.
 codes.chgLoc                    = 1;
-codes.changeLoc                 = 1;
+codes.changeLoc                 = 1; % Note: redundant with chgLoc.
 codes.cueLoc                    = 1;
+codes.stimLocRadius_x100        = 1;
+codes.stimLocTheta_x10          = 1;
+codes.stimMotDir                = 1;
 
-% stimulus location & direction:
-codes.stimLocRadius_x100  = 1; % used to be named 'rfLocEcc'
-codes.stimLocTheta_x10    = 1; % used to be named 'rfLocTheta'
-codes.stimMotDir          = 1; % this is to send stim info; for eevnt codes for each dir see trialcodes.dirtun.m
+% Random number generation seeds
+codes.stimSeed                  = 1;
+codes.trialSeed                 = 1;
 
-% code for random number generation seeds
-codes.stimSeed          = 1;
-codes.trialSeed         = 1;
-
-%% stimulus identity (used in pFix tasks):
+% Stimulus identity info
 codes.stimIdentity          = 1;
 codes.stimIdentityDots      = 1;
 codes.stimIdentityGabor     = 1;
 codes.stimIdentityGrating   = 1;
 codes.stimIdentityTarget    = 1;
 
-
-%% FA PA stuff that may or may not be relevant:
-% codes for PA motion task
-% codes.loc1dir           = 1;
-% codes.loc2dir           = 1;
-% codes.loc1del           = 1;
-% codes.loc2del           = 1;
-
-% % codes for PA orientation task
-% codes.loc1orn           = 16005;
-% codes.loc2orn           = 16006;
-% codes.loc1amp           = 16007;
-% codes.loc2amp           = 16008;
-
-%% code for TOD task
+%% TOD Task Codes
 codes.targ1LocTheta_x10         = 1;
 codes.targ1LocRadius_x100       = 1;
 codes.targ2LocTheta_x10         = 1;
@@ -226,38 +195,30 @@ codes.overlapDuration_x1000     = 1;
 codes.saccadeComplete_plus10    = 1;
 codes.chosenTarget_plus10       = 1;
 codes.correctOrnot_plus10       = 1;
-
 codes.gapStart                  = 0;
 codes.targ1On                   = 0;
 codes.targ2On                   = 0;
 
-%%
+%% Orientation Tuning Codes
+codes.orn               = 1;
 
-% code for orientations in orn tuning task
-codes.orn               = 1; % this is to send stim info; for eevnt codes for each orn see trialcodes.orntun.m
-
-% reward code
+%% Reward Codes
 codes.reward            = 0;
 codes.freeReward        = 0;
 codes.noFreeReward      = 0;
 codes.rewardDuration    = 1;
 
-% micro stim codes
+%% Other Codes
 codes.microStimOn       = 0;
-
-% audio codes
 codes.audioFBKon        = 0;
 codes.lowTone           = 0;
 codes.noiseTone         = 0;
 codes.highTone          = 0;
-
-%% image codes (used in freeview)
-codes.imageId           = 1;     % id of image
-codes.imageOn           = 0;     % time of image onset
-codes.imageOff          = 0;     % time of image offset
-codes.freeViewDur       = 1;     % duration of free image viewing
-
-% opto codes.
-codes.optoStimOn        = 0;     % time of opto stim onset
-codes.optoStimSham      = 0;     % time of sham opto stim
-codes.optoStimTrial     = 1;     % indicator that the current trial is ...
+codes.imageId           = 1;
+codes.imageOn           = 0;
+codes.imageOff          = 0;
+codes.freeViewDur       = 1;
+codes.optoStimOn        = 0;
+codes.optoStimSham      = 0;
+codes.optoStimTrial     = 1;
+end

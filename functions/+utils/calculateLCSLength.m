@@ -9,6 +9,7 @@ function lcsLength = calculateLCSLength(vecA, vecB)
 m = length(vecA);
 n = length(vecB);
 
+% L(i,j) will store the length of the LCS of vecA(1..i-1) and vecB(1..j-1)
 L = zeros(m+1, n+1);
 
 for i = 1:m
