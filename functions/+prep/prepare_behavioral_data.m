@@ -327,15 +327,20 @@ pds_strobes = arrayfun(@(x) x.strobed(:), p_data.trData, ...
     'UniformOutput', false);
 
 % Create the NEV-to-PLDAPS Mapping
-fprintf(['Aligning NEV and PLDAPS trials via exhaustive strobe ' ...
+fprintf(['Aligning NEV and PLDAPS trials via constrained sequence ' ...
     'search...\n']);
 nev_to_pds_map = nan(nNevTrials, 1);
+% define a numeric index of pds_strobes rows so we can limit our search of
+% pds_strobes to rows after the last match:
+pds_strobes_ind = (1:length(pds_strobes))';
 
+% Initialize a pointer to track the last successful PDS match
+last_match_pds_idx = 0;
+try
 % Now, implement the cellfun mapping logic. Loop through each NEV trial,
 % find its match in the pds_strobes cell array, and record the index.
 for i = 1:nNevTrials
     nev_strobe_vector = eventValuesTrials{i}(:);
-
     % Use cellfun to find a match in the PLDAPS strobes
     match_idx = find(cellfun(@(x) isequal(x, nev_strobe_vector), ...
         pds_strobes), 1);
@@ -352,7 +357,6 @@ for i = 1:nNevTrials
            [nev_strobe_vector; 30009]), ...
         pds_strobes), 1);
     end
-
     % If we STILL don't find a match, try again using the
     % nev_strobe_vector limited to the 1st value up to the '30009'
     if isempty(match_idx) && nnz(nev_strobe_vector == 30009) == 1
@@ -365,13 +369,47 @@ for i = 1:nNevTrials
            nev_strobe_vector(1:find(nev_strobe_vector == 30009))), ...
         pds_strobes), 1);
     end
+    % If we STILL don't find a match, try using 'least common subsequence'
+    % (LCS) screening within a constrained window.
+    if isempty(match_idx)
+        % Define the search window starting after the last match
+        search_window_size = 25;
+        search_start_idx = last_match_pds_idx + 1;
+        search_end_idx = min(search_start_idx + search_window_size, length(pds_strobes));
+        
+        search_indices = search_start_idx:search_end_idx;
+        
+        if ~isempty(search_indices)
+            % Compute LCS values only within the search window
+            lcsVals = cellfun(@(x)utils.calculateLCSLength(...
+                nev_strobe_vector, x), pds_strobes(search_indices));
 
-    % If we have a match, add it to the nev_to_pds_map
+            if ~isempty(lcsVals)
+                % Find the best score and any ties within the window
+                maxLcs = max(lcsVals);
+                % Get the RELATIVE indices of ties within the search window
+                relative_indices_of_ties = find(lcsVals == maxLcs);
+                % The best match is the first of these ties
+                best_relative_index = relative_indices_of_ties(1);
+                % Convert the relative index back to the absolute index
+                match_idx = search_indices(best_relative_index);
+            end
+        end
+    end
+    % If we have a match, add it to the nev_to_pds_map and update the pointer
     if ~isempty(match_idx)
         nev_to_pds_map(i) = match_idx;
+        last_match_pds_idx = match_idx;
     else
-        keyboard
+        % If no match is found by any method, we do not assign a match for this
+        % NEV trial and crucially, we DO NOT advance last_match_pds_idx.
+        % This allows the search window for the next NEV trial to start from
+        % the same PDS trial, giving it a chance to "skip over" this
+        % unmatchable NEV fragment.
     end
+end
+catch me
+    keyboard
 end
 
 nMatchedTrials = sum(~isnan(nev_to_pds_map));
