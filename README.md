@@ -29,12 +29,23 @@ This stage bridges a manual sorting process with an automated check.
 *   **Manual Sorting**: The user runs Kilosort/Phy on the `.dat` file from the previous stage to sort spikes and perform manual curation.
 *   **Automated Status Check**: When `run_preprocessing.m` is run, it checks for the presence of Kilosort output files (e.g., `spike_times.npy`). If found, it automatically updates the job's `kilosort_status` to `complete`.
 
-### 3. Data Consolidation (Automated)
-The final step merges the spike data (from Kilosort) and the behavioral data (from the preparation step) into the final `session_data.mat`. When `run_preprocessing.m` is executed, it checks for any jobs where `dat_status`, `behavior_status`, and `kilosort_status` are all `complete`, but `consolidation_status` is `pending`.
+### 3. Waveform Extraction (Automated)
+After spike sorting is complete, the next automated step extracts the mean waveforms for each curated cluster. When `run_preprocessing.m` is executed, it checks for jobs where `kilosort_status` is `complete`, but `waveform_status` is `pending`.
 
-*   It loads the intermediate behavioral data and the Kilosort output.
-*   It calculates and saves the mean waveforms for each cluster.
-*   It saves the final, merged `session_data` struct to `[job.unique_id]_session_data.mat`.
+*   It reads the raw broadband (`.ns5`) and Kilosort output files.
+*   For each cluster, it extracts a snippet of the waveform for every spike.
+*   It calculates the mean and standard deviation of these waveforms.
+*   It saves a **preliminary** `session_data.mat` file containing only the `spikes.wfMeans` and `spikes.wfStds` structures.
+*   On success, it updates the job's `waveform_status` to `complete`.
+
+### 4. Final Data Consolidation (Automated)
+The final step merges the spike times and cluster data (from Kilosort) with the behavioral data (from the preparation step) and the extracted waveforms. When `run_preprocessing.m` is executed, it checks for jobs where `dat_status`, `behavior_status`, `kilosort_status`, and `waveform_status` are all `complete`, but `consolidation_status` is `pending`.
+
+*   It loads the intermediate behavioral data file.
+*   It loads the Kilosort output files (`spike_times.npy`, etc.).
+*   It loads the mean waveforms from the preliminary `session_data.mat` file created in the previous step.
+*   It merges all data sources into a single `session_data` struct.
+*   It **overwrites** the preliminary file with the final, complete `[job.unique_id]_session_data.mat`.
 *   On success, it updates the job's `consolidation_status` to `complete`.
 
 ---
@@ -81,4 +92,7 @@ This pipeline is controlled by the `config/session_manifest.csv` file. Each row 
 1.  **Add a Job:** Add a new row to `config/sessions_manifest.csv`. At a minimum, set `dat_status` and `behavior_status` to `pending`.
 2.  **Run Preparation:** Execute the master script from the MATLAB command line: `>> run_preprocessing`. This will prepare the spike and behavioral data.
 3.  **Perform Manual Sorting:** Run Kilosort/Phy on the generated `.dat` file for the job.
-4.  **Check Status:** Re-run the pipeline script (`>> run_preprocessing`) to automatically detect Kilosort's completion and update the manifest.
+4.  **Run Pipeline to Consolidate:** Re-run the pipeline script (`>> run_preprocessing`). This will:
+    *   Automatically detect Kilosort's completion and update the manifest.
+    *   Extract mean waveforms.
+    *   Perform the final data consolidation.
