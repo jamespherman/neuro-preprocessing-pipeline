@@ -2,9 +2,10 @@ function [trialInfo, eventTimesOutput, eventValuesTrials] = getEventTimes(eventV
 % GETEVENTTIMES Parses and categorizes trial-based event codes (strobes).
 %
 % This function takes raw vectors of event codes and their timestamps and
-% organizes them into a trial-by-trial format. It uses a robust, multi-stage
-% algorithm to demarcate trial boundaries, validate the internal structure of
-% each trial's event data, and handle missing or duplicated strobes.
+% organizes them into a trial-by-trial format. It uses a robust, multi-
+% stage algorithm to demarcate trial boundaries, validate the internal 
+% structure of each trial's event data, and handle missing or duplicated 
+% strobes.
 %
 %   Inputs:
 %       eventValues - A vector of numerical event codes.
@@ -34,31 +35,36 @@ trial_end_indices = [];
 % Task 2: Iterative Trial Demarcation
 while pointer <= length(eventValues)
     % Find the start of the current trial
-    start_idx = find(eventValues(pointer:end) == codes.trialBegin, 1, 'first') + pointer - 1;
+    start_idx = find(eventValues(pointer:end) == codes.trialBegin, 1, ...
+        'first') + pointer - 1;
     if isempty(start_idx)
         % No more trial beginnings found, exit loop
         break;
     end
 
     % Find the start of the *next* trial to define an upper search boundary
-    next_trialBegin_idx = find(eventValues(start_idx + 1:end) == codes.trialBegin, 1, 'first') + start_idx;
+    next_trialBegin_idx = find(eventValues(start_idx + 1:end) == ...
+        codes.trialBegin, 1, 'first') + start_idx;
 
     % Define the search window for the current trial's end
     if isempty(next_trialBegin_idx)
-        % This is the last trial, so it extends to the end of the event stream
+        % This is the last trial, so it extends to the end of the event 
+        % stream
         search_until_idx = length(eventValues);
     else
         % The trial must end before the next one begins
         search_until_idx = next_trialBegin_idx - 1;
     end
 
-    % Refine Trial End: Find the *last* trialEnd strobe before the next trial
+    % Refine Trial End: Find the *last* trialEnd strobe before the next 
+    % trial
     % This handles cases of duplicated trialEnd strobes
-    last_trialEnd_idx = find(eventValues(start_idx + 1:search_until_idx) == codes.trialEnd, 1, 'last') + start_idx;
+    last_trialEnd_idx = find(eventValues(start_idx + ...
+        1:search_until_idx) == codes.trialEnd, 1, 'last') + start_idx;
 
     if isempty(last_trialEnd_idx)
-        % Preliminary Trial End: No trialEnd found, so the trial ends just
-        % before the next trial begins (or at the end of the stream).
+        % Preliminary Trial End: No trialEnd found, so the trial ends 
+        % just before the next trial begins (or at the end of the stream).
         end_idx = search_until_idx;
     else
         % Definitive Trial End: A trialEnd was found.
@@ -85,7 +91,9 @@ for i = 1:length(codeNames)
     category = cats.(codeName);
     if category == 0 % Timing event
         eventTimesOutput.(codeName) = nan(nTrials, 1);
-    elseif category == 1 && ~contains(codeName, 'unique') % Info event identifier
+    
+    % Info event identifier
+    elseif category == 1 && ~contains(codeName, 'unique')
         trialInfo.(codeName) = nan(nTrials, 1);
     end
 end
@@ -110,25 +118,34 @@ for i = 1:nTrials
 
     % --- Verify Internal Structure ---
 
-    % 1. Convert event values to a sequence of categories (0=timing, 1=info).
+    % 1. Convert event values to a sequence of categories (0=timing, 
+    % 1=info).
     [is_known, loc] = ismember(trialEventValues, codeVals);
     category_sequence = nan(size(trialEventValues));
     known_code_names = codeNames(loc(is_known));
     for k = 1:length(known_code_names)
-        category_sequence(find(is_known, k, 'first')) = cats.(known_code_names{k});
+        category_sequence(find(is_known, k, 'first')) = cats.( ...
+            known_code_names{k});
     end
-    category_sequence(isnan(category_sequence)) = 1; % Assume unknown codes are info *values*.
+
+     % Assume unknown codes are info *values*.
+    category_sequence(isnan(category_sequence)) = 1;
 
     % 2. Smooth/denoise the category sequence to correct isolated errors.
-    % A pattern [1, 0, 1] should become [1, 1, 1]. This occurs where a 0 has a convolution result of 2.
-    change_to_one = conv(category_sequence, [1, -2, 1], 'same') == 2 & category_sequence == 0;
+    % A pattern [1, 0, 1] should become [1, 1, 1]. This occurs where a 
+    % 0 has a convolution result of 2.
+    change_to_one = conv(category_sequence, [1, -2, 1], 'same') == 2 & ...
+    category_sequence == 0;
     category_sequence(change_to_one) = 1;
-    % A pattern [0, 1, 0] should become [0, 0, 0]. This occurs where a 1 has a convolution result of -2.
-    change_to_zero = conv(category_sequence, [1, -2, 1], 'same') == -2 & category_sequence == 1;
+    % A pattern [0, 1, 0] should become [0, 0, 0]. This occurs where a 1 
+    % has a convolution result of -2.
+    change_to_zero = conv(category_sequence, [1, -2, 1], 'same') == -2 &...
+    category_sequence == 1;
     category_sequence(change_to_zero) = 0;
 
     % 3. Check for the canonical [0, 0, ... 1, 1] structure.
-    % The difference of the sequence should not contain a -1 (i.e., a 1 followed by a 0).
+    % The difference of the sequence should not contain a -1 (i.e., a 1 
+    % followed by a 0).
     category_diff = diff(category_sequence);
     if any(category_diff == -1)
         trialInfo.isLowConfidence(i) = true;
@@ -141,7 +158,8 @@ for i = 1:nTrials
         if ~isempty(codeIdx)
             codeName = codeNames{codeIdx};
             if any(strcmp(codeName, {'trialBegin', 'trialEnd'}))
-                continue; % These are for demarcation, not stored inside the trial.
+                continue; % These are for demarcation, not stored inside 
+                % the trial.
             end
 
             category = cats.(codeName);

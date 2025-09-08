@@ -47,8 +47,8 @@ fprintf('Reading NEV file: %s\n', nevFile);
 
 % Filter for digital events (channel 0) which contain strobed event codes.
 digitalEvents = spike(spike(:,1) == 0, :);
-eventValues = digitalEvents(:, 2);
-eventTimes = digitalEvents(:, 3);
+eventValuesAll = digitalEvents(:, 2);
+eventTimesAll = digitalEvents(:, 3);
 
 % Organize event codes and times into trial-based structures.
 [trialInfo, eventTimes, eventValuesTrials] = ...
@@ -156,6 +156,7 @@ for i = 1:length(listing)
                     p_candidate.(fields{k}) = all_vars.(fields{k});
                 end
             end
+            close all force;
 
             % Validate that the file was from the correct experiment PC.
             if isfield(p_candidate, 'init') && ...

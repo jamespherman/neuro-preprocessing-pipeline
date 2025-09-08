@@ -16,6 +16,7 @@ Thumbs.db
 *.asv
 *.bak
 *.autosave
+*.ASV
 *~
 
 # MATLAB crash dump files
