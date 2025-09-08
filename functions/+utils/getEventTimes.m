@@ -2,13 +2,9 @@ function [trialInfo, eventTimesOutput, eventValuesTrials] = getEventTimes(eventV
 % GETEVENTTIMES Parses and categorizes trial-based event codes (strobes).
 %
 % This function takes raw vectors of event codes and their timestamps and
-% organizes them into a trial-by-trial format. It separates events into two
-% main categories:
-%   - Timing Events: Mark the time of an occurrence (e.g., fixOn, targOn).
-%     These are stored in the 'eventTimesOutput' struct.
-%   - Information Events: A two-part strobe where the first code identifies
-%     a variable, and the second code is the value of that variable (e.g.,
-%     trialCount, targetDirection). These values are stored in 'trialInfo'.
+% organizes them into a trial-by-trial format. It uses a robust, multi-stage
+% algorithm to demarcate trial boundaries, validate the internal structure of
+% each trial's event data, and handle missing or duplicated strobes.
 %
 %   Inputs:
 %       eventValues - A vector of numerical event codes.
@@ -16,87 +12,136 @@ function [trialInfo, eventTimesOutput, eventValuesTrials] = getEventTimes(eventV
 %
 %   Outputs:
 %       trialInfo         - A struct with fields for each info event type.
+%                           Includes an 'isLowConfidence' flag for trials
+%                           that do not conform to the expected structure.
 %       eventTimesOutput  - A struct with fields for each timing event type.
 %       eventValuesTrials - A cell array, where each cell contains the raw
 %                           event codes for one trial.
 
-% Define strobe values and strobe value categories:
+% Task 1: Initialization
 codes = utils.initCodes;
 cats  = utils.initCodeCats;
 
-% Get field names and values for "codes":
-codeVals  = cell2mat(struct2cell(codes));
+% Get field names for later use in parsing
 codeNames = fieldnames(codes);
+codeVals  = cell2mat(struct2cell(codes));
 
-% Make a vector the same length as "eventValues" that has the category
-% for each strobe value in "eventValues":
-eventCategory = strobeCategory(eventValues, codes, cats);
+% Initialize main loop pointer and storage for trial boundaries
+pointer = 1;
+trial_start_indices = [];
+trial_end_indices = [];
 
-% Count the number of "trialBegin" and "trialEnd" codes. If these match,
-% use them to define trial starts and ends. If they don't, resort to our
-% method based on "eventCategory".
-trialStartTimes = eventTimes(eventValues == codes.trialBegin);
-trialEndTimes   = [trialStartTimes(2:end); eventTimes(end)];
-nStarts = length(trialStartTimes);
-nEnds   = length(trialEndTimes);
-if nStarts > nEnds
-    trialEndTimes(end+1) = eventTimes(end);
-elseif nStarts < nEnds
-    error('getEventTimes:MismatchedTrials', ...
-        'Fewer trial starts than trial ends detected.');
+% Task 2: Iterative Trial Demarcation
+while pointer <= length(eventValues)
+    % Find the start of the current trial
+    start_idx = find(eventValues(pointer:end) == codes.trialBegin, 1, 'first') + pointer - 1;
+    if isempty(start_idx)
+        % No more trial beginnings found, exit loop
+        break;
+    end
+
+    % Find the start of the *next* trial to define an upper search boundary
+    next_trialBegin_idx = find(eventValues(start_idx + 1:end) == codes.trialBegin, 1, 'first') + start_idx;
+
+    % Define the search window for the current trial's end
+    if isempty(next_trialBegin_idx)
+        % This is the last trial, so it extends to the end of the event stream
+        search_until_idx = length(eventValues);
+    else
+        % The trial must end before the next one begins
+        search_until_idx = next_trialBegin_idx - 1;
+    end
+
+    % Refine Trial End: Find the *last* trialEnd strobe before the next trial
+    % This handles cases of duplicated trialEnd strobes
+    last_trialEnd_idx = find(eventValues(start_idx + 1:search_until_idx) == codes.trialEnd, 1, 'last') + start_idx;
+
+    if isempty(last_trialEnd_idx)
+        % Preliminary Trial End: No trialEnd found, so the trial ends just
+        % before the next trial begins (or at the end of the stream).
+        end_idx = search_until_idx;
+    else
+        % Definitive Trial End: A trialEnd was found.
+        end_idx = last_trialEnd_idx;
+    end
+
+    % Store the demarcated trial boundaries
+    trial_start_indices(end+1) = start_idx;
+    trial_end_indices(end+1) = end_idx;
+
+    % Update the main loop pointer to the end of the just-found trial
+    pointer = end_idx + 1;
 end
 
-nTrials = length(trialStartTimes);
+nTrials = length(trial_start_indices);
 
-% Initialize structures to hold "infoStrobes" and "normalStrobes".
+% --- Task 3: Trial-by-Trial Verification and Parsing ---
+
+% Pre-allocate the output structures with NaN values.
 trialInfo = struct;
 eventTimesOutput = struct;
-
-% variable for storing each trial's event values:
-if nargout > 2
-    eventValuesTrials = cell(nTrials,1);
-end
-
-% Loop over all defined codes to pre-allocate fields in the output structs.
 for i = 1:length(codeNames)
     codeName = codeNames{i};
     category = cats.(codeName);
-
-    if category == 0
-        % Category 0 corresponds to a timing event.
+    if category == 0 % Timing event
         eventTimesOutput.(codeName) = nan(nTrials, 1);
-    elseif category == 1 && ~contains(codeName, 'unique')
-        % Category 1 is an info event. 'unique' codes are the values
-        % themselves, not the identifiers, so they don't get fields.
+    elseif category == 1 && ~contains(codeName, 'unique') % Info event identifier
         trialInfo.(codeName) = nan(nTrials, 1);
     end
 end
+% Add a new field to flag trials with non-canonical event structure.
+trialInfo.isLowConfidence = false(nTrials, 1);
+
+% Pre-allocate for the raw event values per trial, if requested.
+if nargout > 2
+    eventValuesTrials = cell(nTrials, 1);
+end
 
 % --- Main Parsing Loop ---
-% Loop through every trial to populate the pre-allocated structures.
 for i = 1:nTrials
-    % Get all events that occurred within the start and end times of this trial.
-    trialEventsIdx = eventTimes >= trialStartTimes(i) & ...
-                     eventTimes < trialEndTimes(i);
-    trialEventValues = eventValues(trialEventsIdx);
-    trialEventTimes = eventTimes(trialEventsIdx);
+    % Extract the subsequence of event values and times for this trial.
+    trial_idx_range = trial_start_indices(i):trial_end_indices(i);
+    trialEventValues = eventValues(trial_idx_range);
+    trialEventTimes = eventTimes(trial_idx_range);
 
     if nargout > 2
         eventValuesTrials{i} = trialEventValues;
     end
 
-    % Loop over every event in the current trial.
-    for j = 1:length(trialEventValues)
-        % Find the name of the current event code.
-        codeIdx = find(codeVals == trialEventValues(j), 1);
+    % --- Verify Internal Structure ---
 
-        % If the code is a known identifier (not a value that follows an
-        % info strobe), then process it.
+    % 1. Convert event values to a sequence of categories (0=timing, 1=info).
+    [is_known, loc] = ismember(trialEventValues, codeVals);
+    category_sequence = nan(size(trialEventValues));
+    known_code_names = codeNames(loc(is_known));
+    for k = 1:length(known_code_names)
+        category_sequence(find(is_known, k, 'first')) = cats.(known_code_names{k});
+    end
+    category_sequence(isnan(category_sequence)) = 1; % Assume unknown codes are info *values*.
+
+    % 2. Smooth/denoise the category sequence to correct isolated errors.
+    % A pattern [1, 0, 1] should become [1, 1, 1]. This occurs where a 0 has a convolution result of 2.
+    change_to_one = conv(category_sequence, [1, -2, 1], 'same') == 2 & category_sequence == 0;
+    category_sequence(change_to_one) = 1;
+    % A pattern [0, 1, 0] should become [0, 0, 0]. This occurs where a 1 has a convolution result of -2.
+    change_to_zero = conv(category_sequence, [1, -2, 1], 'same') == -2 & category_sequence == 1;
+    category_sequence(change_to_zero) = 0;
+
+    % 3. Check for the canonical [0, 0, ... 1, 1] structure.
+    % The difference of the sequence should not contain a -1 (i.e., a 1 followed by a 0).
+    category_diff = diff(category_sequence);
+    if any(category_diff == -1)
+        trialInfo.isLowConfidence(i) = true;
+    end
+
+    % --- Parse Events ---
+    % This logic is reused from the original function's main parsing loop.
+    for j = 1:length(trialEventValues)
+        codeIdx = find(codeVals == trialEventValues(j), 1);
         if ~isempty(codeIdx)
             codeName = codeNames{codeIdx};
-            % Skip trial start/end codes as they are handled separately.
             if any(strcmp(codeName, {'trialBegin', 'trialEnd'}))
-                continue;
+                continue; % These are for demarcation, not stored inside the trial.
             end
 
             category = cats.(codeName);
@@ -105,7 +150,6 @@ for i = 1:nTrials
                 eventTimesOutput.(codeName)(i) = trialEventTimes(j);
             elseif category == 1 && ~contains(codeName, 'unique')
                 % Info strobe: the next event value is the data.
-                % Check for out-of-bounds access.
                 if length(trialEventValues) >= j + 1
                     trialInfo.(codeName)(i) = trialEventValues(j + 1);
                 end
@@ -114,12 +158,14 @@ for i = 1:nTrials
     end
 end
 
-% Manually add the trial start and end times.
-eventTimesOutput.trialBegin = trialStartTimes;
-eventTimesOutput.trialEnd = trialEndTimes;
+% Manually add the trial start and end times, which are derived from the
+% demarcation loop, not the parsing loop.
+eventTimesOutput.trialBegin = eventTimes(trial_start_indices)';
+eventTimesOutput.trialEnd = eventTimes(trial_end_indices)';
 
-% --- Cleanup ---
-% Remove any fields that were pre-allocated but never filled with data.
+% --- Task 4: Cleanup ---
+% Remove any fields that were pre-allocated but never populated with any
+% non-NaN data across all trials.
 tempFieldNames = fieldnames(trialInfo);
 for i = 1:length(tempFieldNames)
     if all(isnan(trialInfo.(tempFieldNames{i})))
@@ -133,64 +179,5 @@ for i = 1:length(tempFieldNames)
         eventTimesOutput = rmfield(eventTimesOutput, tempFieldNames{i});
     end
 end
-end
 
-function strobeCategory = strobeCategory(strobeValue, codes, cats)
-% STROBECATEGORY (Helper) Determines the category of each strobe code.
-%
-% This function is a legacy helper that attempts to classify each raw
-% event value as either a timing strobe (0) or an info strobe (1). It has
-% complex logic to handle cases where the value of an info strobe might be
-% the same as a known timing strobe code.
-
-% Get the names of all defined strobe codes.
-codeNames = fieldnames(codes);
-
-% Create a mapping from strobe numerical value to its category (0 or 1).
-catsAndCodes = [cellfun(@(x)cats.(x), codeNames), ...
-                cellfun(@(x)codes.(x), codeNames)];
-
-% For each event in the input strobeValue vector, find its corresponding
-% category from the map.
-[isKnownCode, codeIdx] = ismember(strobeValue, catsAndCodes(:,2));
-
-% Initialize the output category vector.
-strobeCategory = codeIdx;
-
-% For known codes, assign their predefined category.
-strobeCategory(isKnownCode) = catsAndCodes(codeIdx(isKnownCode), 1);
-
-% For unknown codes (values that are not in our 'codes' list), assume they
-% are the second part of an "info strobe" and assign them category 1.
-strobeCategory(isKnownCode == 0) = 1;
-
-% --- Special Case Handling ---
-% The following logic attempts to correct for cases where a data value
-% (which should be category 1) is the same as a timing code (category 0).
-% It identifies "problematic" info strobes (like random seeds) whose
-% values are likely to conflict with timing codes.
-probInfoNames = codeNames(contains(codeNames, 'Seed'));
-probInfoNames{end+1} = 'targetTheta';
-probInfoVals = cellfun(@(x)codes.(x), probInfoNames);
-
-% Find the locations of these problematic info strobes.
-tempInfoLocs = find(ismember(strobeValue, probInfoVals));
-% Ensure we don't go past the end of the strobe list.
-tempInfoLocs(tempInfoLocs == length(strobeValue)) = [];
-
-% Force the category of the value *following* these strobes to be 1.
-strobeCategory(tempInfoLocs + 1) = 1;
-
-% Another correction: find any isolated '0's surrounded by '1's and flip
-% them to '1'. This is done by looking at the second derivative of the
-% category vector. A pattern of [1, 0, 1] will result in a value of 2 in
-% the second derivative at the position of the '0'.
-twoDiff = [diff([0; diff(strobeCategory)]); 0];
-strobeCategory(twoDiff == 2) = 1;
-
-% Final cleanup: if the last category is different from the second to last,
-% make them match. This handles cases where a trial ends mid-strobe.
-if strobeCategory(end) ~= strobeCategory(end-1)
-    strobeCategory(end) = strobeCategory(end-1);
-end
 end
