@@ -143,6 +143,8 @@ codes.stimOnDur                 = 1;
 codes.stimOffDur                = 1;
 codes.stimOn                    = 0;
 codes.stimOff                   = 0;
+codes.cueChange                 = 0;
+codes.foilChange                = 0;
 codes.stimChange                = 0;
 codes.noChange                  = 0; % Note: redundant with stimChange?
 
@@ -183,6 +185,12 @@ codes.stimIdentityDots      = 1;
 codes.stimIdentityGabor     = 1;
 codes.stimIdentityGrating   = 1;
 codes.stimIdentityTarget    = 1;
+
+% other stimulus information:
+codes.cueMotionDelta            = 1;
+codes.foilMotionDelta           = 1;
+codes.cueStimIsOn               = 0;
+codes.foilStimIsOn              = 0;
 
 %% TOD Task Codes
 codes.targ1LocTheta_x10         = 1;

@@ -13,7 +13,11 @@ clear; clc; close all;
 % Find the project root by looking for the .git directory and add necessary
 % subdirectories to the MATLAB path.
 try
-    repo_root = utils.find_project_root();
+    currDir = pwd;
+    cd ..
+    repo_root = pwd;
+    cd(currDir);
+    clear currDir;
     addpath(fullfile(repo_root, 'functions'));
     addpath(fullfile(repo_root, 'config'));
     disp('Added project functions & config directory to the MATLAB path.');

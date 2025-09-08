@@ -13,13 +13,14 @@ function success = prepare_behavioral_data(job, config)
 % Outputs:
 %   success (logical) - true if the intermediate file was created.
 
+try
 % Start with a failure status
 success = false;
 
 %% 1. Construct Paths
 % Path to the raw NEV file containing spike and event data.
 nevFile = fullfile(config.rawNeuralDataDir, ...
-    [job.raw_filename_base, '.nev']);
+    [char(job.raw_filename_base), '.nev']);
 
 % Directory for this job's processed (intermediate) data.
 intermediateDir = fullfile(config.processedDataDir, job.unique_id);
@@ -62,7 +63,7 @@ fprintf('Searching for PLDAPS data in: %s\n', config.behavioralDataDir);
 dateObj = datetime(job.date, 'InputFormat', 'MM_dd_yyyy');
 formattedDate = string(dateObj, 'yyyyMMdd');
 searchPattern = fullfile(config.behavioralDataDir, ...
-    ['*', formattedDate, '*']);
+    ['*', char(formattedDate), '*']);
 listing = dir(searchPattern);
 
 % --- Pre-filtering to remove redundant directories ---
@@ -331,19 +332,12 @@ last_match_pds_idx = 0;
 anchor_nev_idx = 0;
 
 for i = 1:min(100, nNevTrials)
+    % define current trial's strobes from NEV
     nev_strobe_vector = eventValuesTrials{i}(:);
     
     % Find potential matches by exact strobe sequence comparison.
     match_indices = find(cellfun(@(x) isequal(x, nev_strobe_vector), ...
         pds_strobes));
-
-    % If exact match fails, try fallback using Longest Common Subsequence.
-    if isempty(match_indices)
-        lcsVals = cellfun(@(x)utils.calculateLCSLength(...
-            nev_strobe_vector, x), pds_strobes);
-        maxLcsVal = max(lcsVals);
-        match_indices = find(lcsVals == maxLcsVal);
-    end
 
     % An anchor is only valid if it's a unique, unambiguous match.
     if isscalar(match_indices)
@@ -356,6 +350,35 @@ for i = 1:min(100, nNevTrials)
         fprintf('Anchor match found: NEV trial %d -> PDS trial %d\n', ...
             i, anchor_match_value);
         break; % Exit after finding the first solid anchor.
+    end
+end
+
+% if exact matching doesn't work to find our 'anchor', use LCS method:
+if ~initial_anchor_found
+    for i = 1:min(100, nNevTrials)
+        % define current trial's strobes from NEV
+        nev_strobe_vector = eventValuesTrials{i}(:);
+
+        % Use Longest Common Subsequence.
+        if isempty(match_indices)
+            lcsVals = cellfun(@(x)utils.calculateLCSLength(...
+                nev_strobe_vector, x), pds_strobes);
+            maxLcsVal = max(lcsVals);
+            match_indices = find(lcsVals == maxLcsVal);
+        end
+
+        % An anchor is only valid if it's a unique, unambiguous match.
+        if isscalar(match_indices)
+            match_idx = match_indices(1);
+            nev_to_pds_map(i) = match_idx;
+            last_match_pds_idx = match_idx;
+            initial_anchor_found = true;
+            anchor_nev_idx = i;
+            anchor_match_value = match_idx;
+            fprintf(['Anchor match found: NEV trial %d -> ' ...
+                'PDS trial %d\n'], i, anchor_match_value);
+            break; % Exit after finding the first solid anchor.
+        end
     end
 end
 
@@ -417,7 +440,7 @@ title(sprintf('%d matched PDS trials out of %d NEV trials', ...
 
 % Save the diagnostic figure.
 plotFileName = fullfile(diagnosticsDir, ...
-    [job.unique_id, '_trialCount_alignment.png']);
+    [char(job.unique_id), '_trialCount_alignment.png']);
 saveas(gcf, plotFileName);
 close(gcf);
 
@@ -527,13 +550,15 @@ trDataFieldsToCopy = {};
 if isfield(p_data, 'trData') && ~isempty(p_data.trData)
     allTrDataFields = {};
     for i = 1:numel(p_data.trData)
-        allTrDataFields = union(allTrDataFields, fieldnames(p_data.trData(i)));
+        allTrDataFields = union(allTrDataFields, fieldnames( ...
+            p_data.trData(i)));
     end
 
     existingTrialInfoFields = fieldnames(trialInfo);
     for f = 1:numel(allTrDataFields)
         fieldName = allTrDataFields{f};
-        if ismember(fieldName, existingTrialInfoFields) || strcmp(fieldName, 'timing')
+        if ismember(fieldName, existingTrialInfoFields) || ...
+            strcmp(fieldName, 'timing')
             continue;
         end
 
@@ -632,122 +657,188 @@ codes = utils.initCodes;
 is_gsac_4factors_trial = (trialInfo.taskCode == ...
     codes.uniqueTaskCode_gSac_4factors);
 
-if any(is_gsac_4factors_trial)
-    fprintf('Found gSac_4factors trials. Applying timestamp correction...\n');
+% Identify "good" non-gSac trials to build the correction model.
+good_trial_indices = find(~is_gsac_4factors_trial & ...
+    ~isnan(nev_to_pds_map));
 
-    % Identify "good" non-gSac trials to build the correction model.
-    good_trial_indices = find(~is_gsac_4factors_trial & ...
-        ~isnan(nev_to_pds_map));
+if ~isempty(good_trial_indices)
+    % Collect paired timestamps from reliable trials.
+    pds_trial_end_times = eventTimes.pdsTrialEnd(good_trial_indices);
+    pds_trial_start_ptb = eventTimes.pdsTrialStartPTB( ...
+        good_trial_indices);
 
-    if ~isempty(good_trial_indices)
-        % Collect paired timestamps from reliable trials.
-        pds_trial_end_times = eventTimes.pdsTrialEnd(good_trial_indices);
-        pds_trial_start_ptb = eventTimes.pdsTrialStartPTB(good_trial_indices);
+    pldaps_times = pds_trial_start_ptb + pds_trial_end_times;
+    ripple_times = eventTimes.trialEnd(good_trial_indices);
 
-        pldaps_times = pds_trial_start_ptb + pds_trial_end_times;
-        ripple_times = eventTimes.trialEnd(good_trial_indices);
+    % Remove pairs with NaN values before fitting.
+    nan_mask = isnan(pldaps_times) | isnan(ripple_times);
+    pldaps_times(nan_mask) = [];
+    ripple_times(nan_mask) = [];
 
-        % Remove pairs with NaN values before fitting.
-        nan_mask = isnan(pldaps_times) | isnan(ripple_times);
-        pldaps_times(nan_mask) = [];
-        ripple_times(nan_mask) = [];
+    if numel(pldaps_times) > 1 % Need at least 2 points for a line.
+        % --- Outlier Removal ---
+        [p_initial, ~, mu_initial] = polyfit(pldaps_times, ...
+            ripple_times, 1);
+        residuals = ripple_times - polyval(p_initial, pldaps_times, ...
+            [], mu_initial);
+        is_outlier = abs(residuals) > 3 * std(residuals);
 
-        if numel(pldaps_times) > 1 % Need at least 2 points for a line.
-            % --- Outlier Removal ---
-            [p_initial, ~, mu_initial] = polyfit(pldaps_times, ripple_times, 1);
-            residuals = ripple_times - polyval(p_initial, pldaps_times, [], mu_initial);
-            is_outlier = abs(residuals) > 3 * std(residuals);
+        if any(is_outlier)
+            fprintf(['  --> Detected and removed %d outlier(s) ' ...
+                'from fit.\n'], nnz(is_outlier));
+        end
 
-            if any(is_outlier)
-                fprintf('  --> Detected and removed %d outlier(s) from fit.\n', ...
-                    nnz(is_outlier));
-            end
+        % Create the final model using only "inlier" data.
+        pldaps_times_clean = pldaps_times(~is_outlier);
+        ripple_times_clean = ripple_times(~is_outlier);
 
-            % Create the final model using only "inlier" data.
-            pldaps_times_clean = pldaps_times(~is_outlier);
-            ripple_times_clean = ripple_times(~is_outlier);
+        [map_params, stats, mu] = polyfit(pldaps_times_clean, ...
+            ripple_times_clean, 1);
+        predicted_ripple = polyval(map_params, pldaps_times_clean, ...
+            [], mu);
 
-            [map_params, stats, mu] = polyfit(pldaps_times_clean, ...
-                ripple_times_clean, 1);
-            predicted_ripple = polyval(map_params, pldaps_times_clean, [], mu);
-
-            % Generate a diagnostic scatter plot.
-            figure;
-            scatter(pldaps_times_clean, ripple_times_clean, 'filled');
-            hold on;
-            plot(pldaps_times_clean, predicted_ripple, 'r-');
+        % Generate a diagnostic scatter plot.
+        figure;
+        scatter(pldaps_times_clean, ripple_times_clean, 'filled');
+        hold on;
+        plot(pldaps_times_clean, predicted_ripple, 'r-');
+        if isfield(stats, 'rsquared')
             title(['Timestamp Correction Fit for ', job.unique_id, ...
-                ' | R^2 = ', num2str(stats.rsquared)]);
-            xlabel('PLDAPS Time (s)');
-            ylabel('Ripple Time (s)');
-            legend('Data', 'Linear Fit', 'Location', 'best');
-            grid on;
+                ' | R^2 = ', num2str(stats.rsquared)], 'Interpreter', 'none');
+        else
+            title(['Timestamp Correction Fit for ', job.unique_id, ...
+                ' | R^2 = ', num2str(stats.normr)], 'interpreter', 'none');
+        end
+        xlabel('PLDAPS Time (s)');
+        ylabel('Ripple Time (s)');
+        legend('Data', 'Linear Fit', 'Location', 'best');
+        grid on;
 
-            % Save the diagnostic figure.
-            plotFileName = fullfile(diagnosticsDir, ...
-                [job.unique_id, '_timestamp_fit.pdf']);
-            saveas(gcf, plotFileName);
-            close(gcf);
+        % Save the diagnostic figure.
+        plotFileName = fullfile(diagnosticsDir, ...
+            [char(job.unique_id), '_timestamp_fit.pdf']);
+        saveas(gcf, plotFileName);
+        close(gcf);
 
-            % Define mapping from NEV target fields to PLDAPS source fields.
-            map = containers.Map(...
-                {'CUE_ON', 'fixAq', 'fixBreak', 'fixOff', 'fixOn', ...
-                 'joyPress', 'lowTone', 'reward', 'REWARD_GIVEN', ...
-                 'saccadeOffset', 'saccadeOnset', 'targetAq', ...
-                 'targetOff', 'targetOn', 'targetReillum', 'trialEnd', ...
-                 'TRIAL_END', 'trialBegin'}, ...
-                {'pdsCueOn', 'pdsFixAq', 'pdsBrokeFix', 'pdsFixOff', ...
-                 'pdsFixOn', 'pdsJoyPress', 'pdsTone', 'pdsReward', ...
-                 'pdsReward', 'pdsSaccadeOffset', 'pdsSaccadeOnset', ...
-                 'pdsTargetAq', 'pdsTargetOff', 'pdsTargetOn', ...
-                 'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd', ...
-                 'pdsTrialBegin'});
-            fields_to_null = {'nonStart', 'blinkDuringSac'};
+    else
+        warning(['Not enough reliable trials to build correction ' ...
+            'model.']);
+    end
 
-            % Apply correction to all gSac_4factors trials.
-            gsac_indices = find(is_gsac_4factors_trial);
-            for i = 1:length(gsac_indices)
-                nevIdx = gsac_indices(i);
-                pdsIdx = nev_to_pds_map(nevIdx);
+else
+    warning('No reliable trials found to build correction model.');
+end
 
-                if ~isnan(pdsIdx) && isfield(p_data.trData(pdsIdx), 'timing') ...
-                   && isfield(p_data.trData(pdsIdx).timing, 'trialStartPTB')
-                    pds_start = p_data.trData(pdsIdx).timing.trialStartPTB;
+% if there are gSac_4factors trials, we need to correct the timestamps:
+if any(is_gsac_4factors_trial)
+    fprintf(['Found gSac_4factors trials. ' ...
+        'Applying timestamp correction...\n']);
 
-                    target_fields = keys(map);
-                    for k = 1:length(target_fields)
-                        target = target_fields{k};
-                        source = map(target);
-                        if isfield(eventTimes, source)
-                            relative_time = eventTimes.(source)(nevIdx);
-                            if ~isnan(relative_time)
-                                absolute_pds = pds_start + relative_time;
-                                corrected_abs = polyval(map_params, ...
-                                    absolute_pds, [], mu);
-                                if isfield(eventTimes, target)
-                                    eventTimes.(target)(nevIdx) = corrected_abs;
-                                end
-                            end
-                        end
-                    end
-                    % Nullify fields known to be unreliable in this task.
-                    for k = 1:length(fields_to_null)
-                        if isfield(eventTimes, fields_to_null{k})
-                            eventTimes.(fields_to_null{k})(nevIdx) = NaN;
+    % Define mapping from NEV target fields to PLDAPS source fields.
+    map = containers.Map(...
+        {'CUE_ON', 'fixAq', 'fixBreak', 'fixOff', 'fixOn', ...
+        'joyPress', 'lowTone', 'reward', 'REWARD_GIVEN', ...
+        'saccadeOffset', 'saccadeOnset', 'targetAq', ...
+        'targetOff', 'targetOn', 'targetReillum', 'trialEnd', ...
+        'TRIAL_END', 'trialBegin'}, ...
+        {'pdsCueOn', 'pdsFixAq', 'pdsBrokeFix', 'pdsFixOff', ...
+        'pdsFixOn', 'pdsJoyPress', 'pdsTone', 'pdsReward', ...
+        'pdsReward', 'pdsSaccadeOffset', 'pdsSaccadeOnset', ...
+        'pdsTargetAq', 'pdsTargetOff', 'pdsTargetOn', ...
+        'pdsTargetReillum', 'pdsTrialEnd', 'pdsTrialEnd', ...
+        'pdsTrialBegin'});
+    fields_to_null = {'nonStart', 'blinkDuringSac'};
+
+    % Apply correction to all gSac_4factors trials.
+    gsac_indices = find(is_gsac_4factors_trial);
+    for i = 1:length(gsac_indices)
+        nevIdx = gsac_indices(i);
+        pdsIdx = nev_to_pds_map(nevIdx);
+
+        if ~isnan(pdsIdx) && isfield(p_data.trData(pdsIdx), ...
+                'timing') ...
+                && isfield(p_data.trData(pdsIdx).timing, ...
+                'trialStartPTB')
+            pds_start = p_data.trData(pdsIdx).timing.trialStartPTB;
+
+            target_fields = keys(map);
+            for k = 1:length(target_fields)
+                target = target_fields{k};
+                source = map(target);
+                if isfield(eventTimes, source)
+                    relative_time = eventTimes.(source)(nevIdx);
+                    if ~isnan(relative_time)
+                        absolute_pds = pds_start + relative_time;
+                        corrected_abs = polyval(map_params, ...
+                            absolute_pds, [], mu);
+                        if isfield(eventTimes, target)
+                            eventTimes.(target)(nevIdx) = ...
+                                corrected_abs;
                         end
                     end
                 end
             end
-            fprintf('Timestamp correction applied to %d gSac trials.\n', ...
-                length(gsac_indices));
-        else
-            warning('Not enough reliable trials to build correction model.');
+            % Nullify fields known to be unreliable in this task.
+            for k = 1:length(fields_to_null)
+                if isfield(eventTimes, fields_to_null{k})
+                    eventTimes.(fields_to_null{k})(nevIdx) = NaN;
+                end
+            end
         end
-    else
-        warning('No reliable trials found to build correction model.');
     end
+    fprintf('Timestamp correction applied to %d gSac trials.\n', ...
+        length(gsac_indices));
 else
     fprintf('No gSac_4factors trials found. Skipping correction.\n');
+end
+%% 4.6 Timestamp Correction for Tokens Task Outcome
+% This section applies the session's clock correction model to the
+% 'pdsOutcomeOn' event times for trials from the 'tokens' task.
+
+% Identify trials belonging to the 'tokens' task
+is_tokens_trial = trialInfo.taskCode == codes.uniqueTaskCode_tokens;
+
+% Proceed only if there are tokens trials and a valid mapping exists
+if any(is_tokens_trial) && exist('map_params', 'var')
+    fprintf(['Found tokens trials. Applying timestamp correction to ' ...
+        '''outcomeOn'' event.\n']);
+    
+    % Create and initialize a new field to hold the corrected timestamps
+    eventTimes.outcomeOn = nan(nNevTrials, 1);
+    
+    % Get the indices of the tokens trials to be corrected
+    tokens_indices = find(is_tokens_trial);
+    
+    % Loop through each tokens trial
+    for i = 1:length(tokens_indices)
+        nevIdx = tokens_indices(i);
+        
+        % Get the necessary PDS-based timestamps for this trial
+        pds_start_time = eventTimes.pdsTrialStartPTB(nevIdx);
+        relative_outcome_time = eventTimes.pdsOutcomeOn(nevIdx);
+        
+        % Ensure both required time values are valid numbers before 
+        % proceeding
+        if ~isnan(pds_start_time) && ~isnan(relative_outcome_time)
+            
+            % Step 1: Calculate the absolute time of the event on the PDS 
+            % clock
+            absolute_pds_time = pds_start_time + relative_outcome_time;
+            
+            % Step 2: Translate the absolute PDS time into the Ripple 
+            % clock's time base using the model derived from the session's 
+            % 'trialEnd' events.
+            corrected_ripple_time = polyval(map_params, ...
+                absolute_pds_time, [], mu);
+            
+            % Step 3: Assign the corrected timestamp to the new field
+            eventTimes.outcomeOn(nevIdx) = corrected_ripple_time;
+        end
+    end
+else
+    fprintf(['No tokens trials. Skipping timestamp correction to ' ...
+        '''outcomeOn'' event.\n']);
+    keyboard
 end
 
 %% 5. Save Intermediate File
@@ -768,6 +859,10 @@ catch ME
         'and type ''dbcont'' to continue or ''dbquit'' to exit.']);
     keyboard; % Pause for debugging
     success = false;
+end
+
+catch me
+    keyboard
 end
 
 end

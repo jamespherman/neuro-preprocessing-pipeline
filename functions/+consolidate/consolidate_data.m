@@ -20,9 +20,9 @@ function success = consolidate_data(job, config)
 
         % Define paths for all input files.
         behavioralDataPath = fullfile(jobDataDir, ...
-            [job.unique_id, '_intermediate_data.mat']);
+            [char(job.unique_id), '_intermediate_data.mat']);
         sessionDataPath = fullfile(jobDataDir, ...
-            [job.unique_id, '_session_data.mat']);
+            [char(job.unique_id), '_session_data.mat']);
         spike_times_path = fullfile(jobDataDir, 'spike_times.npy');
         spike_clusters_path = fullfile(jobDataDir, 'spike_clusters.npy');
         cluster_info_path = fullfile(jobDataDir, 'cluster_info.tsv');
@@ -90,9 +90,9 @@ function success = consolidate_data(job, config)
             config.samplingRate;
 
         % --- Save the final consolidated data ---
-
+        fprintf('Writing .mat file...\n');
         outputFilePath = fullfile(jobDataDir, ...
-            [job.unique_id, '_session_data.mat']);
+            [char(job.unique_id), '_session_data.mat']);
         save(outputFilePath, 'session_data', '-v7.3');
 
         fprintf('Successfully consolidated data for session %s\n', ...
