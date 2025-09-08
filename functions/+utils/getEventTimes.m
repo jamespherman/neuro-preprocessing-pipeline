@@ -166,6 +166,14 @@ for i = 1:nTrials
             if category == 0
                 % Timing strobe: store the timestamp.
                 eventTimesOutput.(codeName)(i) = trialEventTimes(j);
+
+                if strcmp(codeName, 'reward')
+                    if ~isfield(eventTimesOutput, 'rewardCell')
+                        eventTimesOutput.rewardCell = cell(nTrials, 1);
+                    end
+                    eventTimesOutput.rewardCell{i}(end+1) = trialEventTimes(j);
+                end
+
             elseif category == 1 && ~contains(codeName, 'unique')
                 % Info strobe: the next event value is the data.
                 if length(trialEventValues) >= j + 1
