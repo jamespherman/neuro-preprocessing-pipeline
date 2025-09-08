@@ -52,7 +52,7 @@ eventTimesAll = digitalEvents(:, 3);
 
 % Organize event codes and times into trial-based structures.
 [trialInfo, eventTimes, eventValuesTrials] = ...
-    utils.getEventTimes(eventValues, eventTimes);
+    utils.getEventTimes(eventValuesAll, eventTimesAll);
 nNevTrials = numel(eventValuesTrials);
 fprintf('Found %d trials in NEV file.\n', nNevTrials);
 
@@ -680,7 +680,7 @@ if ~isempty(good_trial_indices)
         % --- Outlier Removal ---
         [p_initial, ~, mu_initial] = polyfit(pldaps_times, ...
             ripple_times, 1);
-        residuals = ripple_times - polyval(p_initial, pldaps_times, ...
+        residuals = ripple_times(:) - polyval(p_initial, pldaps_times, ...
             [], mu_initial);
         is_outlier = abs(residuals) > 3 * std(residuals);
 
