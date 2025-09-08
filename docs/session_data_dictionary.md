@@ -1,6 +1,6 @@
 # Data Dictionary for `session_data.mat`
 
-This document provides a comprehensive description of the data structure contained within the `session_data.mat` file. This file is the final output of the data processing pipeline, created by `consolidate.consolidate_session.m`. It merges behavioral data, which has been aligned and processed by `prep.prepare_behavioral_data.m`, with the output of the Kilosort spike sorting analysis.
+This document provides a comprehensive description of the data structure contained within the `session_data.mat` file. This file is the final output of the data processing pipeline, created by `consolidate.consolidate_data.m`. It merges behavioral data (from `prep.prepare_behavioral_data.m`), spike data (from Kilosort), and mean waveform data (from `consolidate.extract_waveforms.m`).
 
 The `session_data.mat` file contains a single top-level struct named `session_data`.
 
@@ -37,7 +37,7 @@ These fields are derived from the `.nev` file and provide the basic structure of
 
 ### PLDAPS Fields (from `p.trVars` and `p.trData`)
 
-The following fields are sourced from the PLDAPS `p` structure, which is saved on a per-trial basis. Because different tasks may save different variables, this list is a superset of all possible fields found across the documented tasks. Not all fields will be present in every `session_data.mat` file.
+**Note on Dynamic Fields**: The fields listed below are sourced from the PLDAPS `p` structure, which is saved on a per-trial basis. The `prepare_behavioral_data.m` script dynamically discovers all scalar and cell-based variables within the `p.trVars` and `p.trData` structures and adds them to the `trialInfo` table. Because different behavioral tasks save different variables, the list below should be considered a representative superset of possible fields, not an exhaustive list. Not all fields will be present in every `session_data.mat` file.
 
 #### General & Control Variables
 
@@ -134,7 +134,7 @@ The `eventTimes` structure contains vectors of timestamps for key trial events. 
 
 ### PLDAPS Timing Fields (prefixed with `pds`)
 
-These fields are dynamically added from the `p.trData.timing` structure in the PLDAPS data. The `prepare_behavioral_data.m` script prefixes the original field name with `pds`. For example, `p.trData.timing.targetReillum` becomes `eventTimes.pdsTargetReillum`.
+**Note on Dynamic Fields**: These fields are dynamically discovered from the `p.trData.timing` structure in the PLDAPS data. The `prepare_behavioral_data.m` script identifies all scalar fields within this structure and adds them to `eventTimes`, prefixing the original field name with `pds`. For example, `p.trData.timing.targetReillum` becomes `eventTimes.pdsTargetReillum`. The list below is representative, but the exact fields present may vary between tasks.
 
 | Field | Description |
 |---|---|
@@ -172,15 +172,41 @@ In sessions that include the `gSac_4factors` task, a special correction procedur
 
 ### Correction Method
 
-1.  **Model Fitting**: The pipeline identifies all trials within the session that are *not* `gSac_4factors` trials to serve as a reliable "ground truth." It then builds a linear regression model (`polyfit`) to map the PLDAPS-based timestamps (`p.trData.timing.trialStartPTB`) from these reliable trials to the master Ripple-based timestamps (`eventTimes.trialBegin`).
+1.  **Identify Ground Truth**: The pipeline identifies all trials within the session that are *not* `gSac_4factors` trials to serve as a reliable "ground truth" for timestamp alignment.
 
-2.  **Timestamp Prediction**: This linear model is then used to predict the correct Ripple-based timestamps for all event times recorded within the `gSac_4factors` trials. The original, inaccurate timestamps for these trials are overwritten with the corrected values. This affects both the main `.nev`-derived fields (e.g., `eventTimes.trialBegin`, `eventTimes.fixAq`) and the `pds` prefixed fields.
+2.  **Fit Linear Model**: It builds a linear regression model (`polyfit`) to map the PLDAPS-based timestamps from the reliable trials to the master Ripple-based timestamps.
+    *   **Outlier Removal**: Before fitting the final model, an initial fit is performed to identify and remove outliers. Any data points where the residual (error) is more than 3 standard deviations from the mean are excluded from the final fit.
 
-3.  **Nulling Unreliable Fields**: Certain event fields that are known to be particularly unreliable in this task are explicitly set to `NaN` for all `gSac_4factors` trials. These fields include `nonStart` and `blinkDuringSac`.
+3.  **Predict and Correct Timestamps**: This linear model is then used to predict the correct, Ripple-based timestamps for all event times recorded within the `gSac_4factors` trials. The original, inaccurate timestamps for these trials are overwritten with the corrected values. This correction is applied to a specific set of event fields.
+
+4.  **Null Unreliable Fields**: Certain event fields that are known to be particularly unreliable in this task are explicitly set to `NaN` for all `gSac_4factors` trials. These fields include `nonStart` and `blinkDuringSac`.
+
+### Corrected Fields
+
+The following fields in the `eventTimes` structure are re-calculated based on the linear model for all `gSac_4factors` trials:
+
+*   `CUE_ON`
+*   `fixAq`
+*   `fixBreak`
+*   `fixOff`
+*   `fixOn`
+*   `joyPress`
+*   `lowTone`
+*   `reward`
+*   `REWARD_GIVEN`
+*   `saccadeOffset`
+*   `saccadeOnset`
+*   `targetAq`
+*   `targetOff`
+*   `targetOn`
+*   `targetReillum`
+*   `trialEnd`
+*   `TRIAL_END`
+*   `trialBegin`
 
 ### Diagnostic Plot
 
-As part of this process, a diagnostic plot is generated to allow for visual inspection of the quality of the linear fit. This plot, named `{unique_id}_timestamp_fit.png`, is saved in the `diagnostics` subfolder within the session's processed data directory (e.g., `.../{unique_id}/diagnostics/`). It shows a scatter plot of the ground-truth timestamps and the best-fit line.
+As part of this process, a diagnostic plot is generated to allow for visual inspection of the quality of the linear fit. This plot, named `{unique_id}_timestamp_fit.pdf`, is saved in the `diagnostics` subfolder within the session's processed data directory (e.g., `.../{unique_id}/diagnostics/`). It shows a scatter plot of the ground-truth timestamps (after outlier removal) and the best-fit line, along with the R-squared value of the fit.
 
 ---
 

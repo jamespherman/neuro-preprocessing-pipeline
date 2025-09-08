@@ -220,6 +220,8 @@ This substructure contains timestamps for all critical events within the trial. 
 
 **All timestamps are measured in seconds relative to `p.trData.timing.trialStartPTB`**. This reference time is captured at the very beginning of the trial's `_run.m` function using `pds.getTimes`, which calls Psychtoolbox's `GetSecs`. Subsequent event times are calculated as `timeNow = GetSecs - p.trData.timing.trialStartPTB;`.
 
+**Important Note on Timing Accuracy**: The timestamps recorded by this specific task (`gSac_4factors`) are known to be susceptible to drift over the course of a long session. For this reason, the `prep.prepare_behavioral_data.m` script includes a special correction procedure that re-aligns these timestamps to the master Ripple clock based on a linear model. For a detailed description of this correction, please see the "Special Case: Timestamp Correction for `gSac_4factors` Task" section in the main `session_data_dictionary.md` document.
+
 | Field | Description |
 |---|---|
 | `trialStartPTB` | The trial start time as recorded by Psychtoolbox (`GetSecs`). This is the master reference time for all other timestamps in this structure. |
