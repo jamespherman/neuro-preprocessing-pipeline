@@ -839,7 +839,6 @@ if any(is_tokens_trial) && exist('map_params', 'var')
 else
     fprintf(['No tokens trials. Skipping timestamp correction to ' ...
         '''outcomeOn'' event.\n']);
-    keyboard
 end
 
 %% 5. Save Intermediate File

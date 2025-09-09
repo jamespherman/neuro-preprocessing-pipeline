@@ -171,7 +171,8 @@ for i = 1:nTrials
                     if ~isfield(eventTimesOutput, 'rewardCell')
                         eventTimesOutput.rewardCell = cell(nTrials, 1);
                     end
-                    eventTimesOutput.rewardCell{i}(end+1) = trialEventTimes(j);
+                    eventTimesOutput.rewardCell{i}(end+1) = ...
+                        trialEventTimes(j);
                 end
 
             elseif category == 1 && ~contains(codeName, 'unique')
