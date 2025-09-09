@@ -199,11 +199,27 @@ for i = 1:length(tempFieldNames)
     end
 end
 
+try
 tempFieldNames = fieldnames(eventTimesOutput);
 for i = 1:length(tempFieldNames)
-    if all(isnan(eventTimesOutput.(tempFieldNames{i})))
-        eventTimesOutput = rmfield(eventTimesOutput, tempFieldNames{i});
+    currentField = eventTimesOutput.(tempFieldNames{i});
+
+    if iscell(currentField)
+        % Check if all cells are empty or contain NaN
+        if all(cellfun(@isempty, currentField)) || ...
+           all(cellfun(@(x)all(isnan(x)), currentField))
+            eventTimesOutput = rmfield(eventTimesOutput, ...
+                tempFieldNames{i});
+        end
+    else
+        % Check for NaN values in numeric arrays
+        if all(isnan(currentField))
+            eventTimesOutput = rmfield(eventTimesOutput, ...
+                tempFieldNames{i});
+        end
     end
 end
-
+catch me
+    keyboard
+end
 end
