@@ -129,6 +129,7 @@ The `eventTimes` structure contains vectors of timestamps for key trial events. 
 | `sacOn` | Timestamp of saccade onset. |
 | `sacOff` | Timestamp of saccade offset. |
 | `reward` | Timestamp of when the reward was delivered. |
+| `outcomeOn` | For 'tokens' task trials, the corrected timestamp of when the token outcome was displayed. `NaN` for other tasks. |
 | `brokeFix` | Timestamp of when a fixation break occurred. |
 | `brokeJoy` | Timestamp of when a joystick break occurred. |
 
@@ -207,6 +208,18 @@ The following fields in the `eventTimes` structure are re-calculated based on th
 ### Diagnostic Plot
 
 As part of this process, a diagnostic plot is generated to allow for visual inspection of the quality of the linear fit. This plot, named `{unique_id}_timestamp_fit.pdf`, is saved in the `diagnostics` subfolder within the session's processed data directory (e.g., `.../{unique_id}/diagnostics/`). It shows a scatter plot of the ground-truth timestamps (after outlier removal) and the best-fit line, along with the R-squared value of the fit.
+
+---
+
+## Special Case: Timestamp Correction for 'tokens' Task Outcome
+
+For trials belonging to the 'tokens' task, the general session-wide timestamp correction model (as described in the `gSac_4factors` section) is used to calculate a precise, corrected timestamp for when the trial's outcome (i.e., the token) was displayed.
+
+### Correction Method
+
+1.  **Identify 'tokens' Trials**: The pipeline identifies all trials where the `taskCode` corresponds to the 'tokens' task.
+2.  **Apply Linear Model**: For each of these trials, the pipeline takes the PLDAPS-based timestamp for the outcome display (`pdsOutcomeOn`) and uses the session's linear correction model to translate it into the master Ripple clock's time base.
+3.  **Store Corrected Timestamp**: The resulting corrected timestamp is stored in a new, dedicated field in the `eventTimes` structure called `outcomeOn`. If a trial is not a 'tokens' task trial, its value in `eventTimes.outcomeOn` will be `NaN`.
 
 ---
 
