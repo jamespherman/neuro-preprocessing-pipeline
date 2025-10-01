@@ -98,6 +98,16 @@ for i = 1:height(jobs)
         end
     end
 
+    % --- Merge Candidate Diagnostics ---
+    if strcmp(job.kilosort_status, "complete")
+        diagnostics_dir = fullfile(config.processedDataDir, job.unique_id, 'diagnostics');
+        report_path = fullfile(diagnostics_dir, sprintf('%s_anticorrelation_report.csv', job.unique_id));
+        if ~isfile(report_path)
+            fprintf('Generating anti-correlation report...\n');
+            utils.generate_anticorrelation_report(job, config);
+        end
+    end
+
     % --- 4. Waveform Extraction ---
     if strcmp(job.waveform_status, "pending") && ...
        strcmp(job.dat_status, "complete") && ...
