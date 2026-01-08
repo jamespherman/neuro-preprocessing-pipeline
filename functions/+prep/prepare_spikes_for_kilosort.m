@@ -61,8 +61,10 @@ try
             orderingVector = knownOrderings(key);
 
             if length(orderingVector) == size(corrMatrix, 1)
+                
                 % Reorder the correlation matrix according to the template.
                 reorderedMatrix = corrMatrix(orderingVector, orderingVector);
+
                 % A good match will have high values on the first
                 % off-diagonal. We sum this diagonal to get a score.
                 score = sum(diag(reorderedMatrix, 1));
